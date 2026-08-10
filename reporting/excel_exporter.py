@@ -1,23 +1,3 @@
-"""
-reporting/excel_exporter.py
-============================
-İki sekme içeren biçimlendirilmiş Excel (.xlsx) raporu üreten modül.
-
-Sekme 1 — "SLA Özet":
-    - Özet SLA DataFrame'i (6 sütun)
-    - Başlık satırı: Koyu lacivert arka plan, beyaz yazı, kalın
-    - Alternatif satır renklendirme (zebra stripe)
-    - Conditional formatting: Passed → yeşil, Failed → kırmızı
-    - Sayı formatları: Süre 0.00, Availability %0.0000
-
-Sekme 2 — "Kesinti Detayları":
-    - Site Name | Başlangıç | Bitiş | Süre (Dakika)
-    - Tarih formatı: DD.MM.YYYY HH:MM:SS
-    - Site bazında gruplu, zaman sıralı
-
-Dosya adı: SLA_Report_<N>M_<YYYY-MM-DD>.xlsx
-"""
-
 from datetime import datetime, date
 from pathlib import Path
 
@@ -58,9 +38,7 @@ from utils.logger import get_logger
 
 logger = get_logger(__name__)
 
-# ---------------------------------------------------------------------------
-# Stil sabitleri
-# ---------------------------------------------------------------------------
+# Excel tablo hücre ve kenarlık stilleri
 _THIN_SIDE = Side(style="thin", color="FFB8CCE4")
 _THIN_BORDER = Border(
     left=_THIN_SIDE, right=_THIN_SIDE, top=_THIN_SIDE, bottom=_THIN_SIDE
@@ -83,22 +61,7 @@ def export_to_excel(
     output_dir: str | Path | None = None,
     report_date: date | None = None,
 ) -> Path:
-    """
-    SLA özet tablosunu ve kesinti detaylarını iki sekme halinde Excel'e yazar.
-
-    Args:
-        summary_df: sla_calculator.calculate_sla() çıktısı.
-        outages: state_machine.detect_outages() çıktısı (ham kesinti listesi).
-        period_months: Rapor dönemi (1 veya 3).
-        output_dir: Çıktı klasörü yolu. None ise settings.OUTPUT_DIR kullanılır.
-        report_date: Dosya adındaki tarih. None ise bugün kullanılır.
-
-    Returns:
-        Yazılan .xlsx dosyasının Path nesnesi.
-
-    Raises:
-        OSError: Dosya yazılamadığında.
-    """
+    """SLA özet tablosunu ve kesinti detaylarını iki sekme halinde Excel dosyasına aktarır."""
     out_dir = Path(output_dir) if output_dir else Path(OUTPUT_DIR)
     out_dir.mkdir(parents=True, exist_ok=True)
 
@@ -110,22 +73,15 @@ def export_to_excel(
 
     wb = Workbook()
 
-    # -----------------------------------------------------------------------
-    # Sekme 1: SLA Özet
-    # -----------------------------------------------------------------------
+    # Sekme 1: SLA Özet tablosu
     ws_summary = wb.active
     ws_summary.title = EXCEL_SHEET_SUMMARY
     _build_summary_sheet(ws_summary, summary_df)
 
-    # -----------------------------------------------------------------------
-    # Sekme 2: Kesinti Detayları
-    # -----------------------------------------------------------------------
+    # Sekme 2: Ham kesinti detayları
     ws_details = wb.create_sheet(title=EXCEL_SHEET_DETAILS)
     _build_details_sheet(ws_details, outages)
 
-    # -----------------------------------------------------------------------
-    # Kaydet
-    # -----------------------------------------------------------------------
     try:
         wb.save(file_path)
         logger.info("Excel raporu başarıyla yazıldı: %s", file_path)
@@ -137,13 +93,8 @@ def export_to_excel(
     return file_path
 
 
-# ---------------------------------------------------------------------------
-# Yardımcı: Sekme 1 oluşturma
-# ---------------------------------------------------------------------------
-
 def _build_summary_sheet(ws, df: pd.DataFrame) -> None:
-    """SLA Özet sekmesini oluşturur."""
-
+    """SLA Özet sekmesini biçimlendirir ve verileri ekler."""
     headers = [
         COL_OUT_SITE,
         COL_OUT_PERIOD,
@@ -153,7 +104,6 @@ def _build_summary_sheet(ws, df: pd.DataFrame) -> None:
         COL_OUT_SLA,
     ]
 
-    # Başlık satırı
     ws.append(headers)
     header_row = ws[1]
     for cell in header_row:
@@ -162,10 +112,8 @@ def _build_summary_sheet(ws, df: pd.DataFrame) -> None:
         cell.alignment = _CENTER
         cell.border = _THIN_BORDER
 
-    # Başlık satırı yüksekliği
     ws.row_dimensions[1].height = 22
 
-    # Veri satırları
     for row_idx, (_, row) in enumerate(df.iterrows(), start=2):
         sla_status = row[COL_OUT_SLA]
         is_alt_row = (row_idx % 2 == 0)
@@ -185,11 +133,10 @@ def _build_summary_sheet(ws, df: pd.DataFrame) -> None:
             cell.border = _THIN_BORDER
             cell.alignment = _CENTER if col_idx != 1 else _LEFT
 
-            # Zebra stripe
             if is_alt_row:
                 cell.fill = _ALT_ROW_FILL
 
-            # Conditional formatting: SLA Durumu sütunu (6. sütun)
+            # SLA durumuna göre koşullu renklendirme (Passed: Yeşil, Failed: Kırmızı)
             if col_idx == 6:
                 if sla_status == "Passed":
                     cell.fill = _PASSED_FILL
@@ -198,20 +145,18 @@ def _build_summary_sheet(ws, df: pd.DataFrame) -> None:
                     cell.fill = _FAILED_FILL
                     cell.font = _FAILED_FONT_STYLE
 
-            # Sayı formatları
-            if col_idx == 4:  # Toplam Kesinti Süresi
+            if col_idx == 4:
                 cell.number_format = "0.00"
-            elif col_idx == 5:  # Availability (%)
+            elif col_idx == 5:
                 cell.number_format = '0.0000"%"'
 
         ws.row_dimensions[row_idx].height = 18
 
-    # Sütun genişlikleri
     col_widths = [32, 16, 22, 30, 20, 16]
     for col_idx, width in enumerate(col_widths, start=1):
         ws.column_dimensions[get_column_letter(col_idx)].width = width
 
-    # Başlığın üstüne rapor başlığı ekle
+    # Tablo üst başlık başlığını ekle ve sabitle
     ws.insert_rows(1)
     ws.merge_cells("A1:F1")
     title_cell = ws["A1"]
@@ -221,21 +166,14 @@ def _build_summary_sheet(ws, df: pd.DataFrame) -> None:
     title_cell.alignment = Alignment(horizontal="center", vertical="center")
     ws.row_dimensions[1].height = 28
 
-    # Dondur: başlık + sütun başlığı satırları sabit kalsın
     ws.freeze_panes = "A3"
 
 
-# ---------------------------------------------------------------------------
-# Yardımcı: Sekme 2 oluşturma
-# ---------------------------------------------------------------------------
-
 def _build_details_sheet(ws, outages: list[OutageRecord]) -> None:
-    """Kesinti Detayları sekmesini oluşturur."""
-
+    """Kesinti Detayları sekmesini oluşturur ve zaman sıralı kesintileri listeler."""
     headers = ["Site Name", "Başlangıç", "Bitiş", "Süre (Dakika)"]
     date_fmt = "%d.%m.%Y %H:%M:%S"
 
-    # Başlık satırı
     ws.append(headers)
     header_row = ws[1]
     for cell in header_row:
@@ -250,7 +188,6 @@ def _build_details_sheet(ws, outages: list[OutageRecord]) -> None:
         logger.info("Kesinti detayları sekmesi: kesinti yok.")
         return
 
-    # Site bazında sırala, ardından başlangıç zamanına göre
     sorted_outages = sorted(outages, key=lambda o: (o.site, o.start))
 
     for row_idx, rec in enumerate(sorted_outages, start=2):
@@ -273,7 +210,6 @@ def _build_details_sheet(ws, outages: list[OutageRecord]) -> None:
 
         ws.row_dimensions[row_idx].height = 17
 
-    # Sütun genişlikleri
     col_widths = [32, 22, 22, 18]
     for col_idx, width in enumerate(col_widths, start=1):
         ws.column_dimensions[get_column_letter(col_idx)].width = width

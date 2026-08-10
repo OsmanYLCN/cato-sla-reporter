@@ -1,28 +1,3 @@
-"""
-engine/state_machine.py
-========================
-Kesinti Korelasyon Motoru — Projenin en kritik modülü.
-
-Zaman pencereli (time-windowed) bir Durum Makinesi (State Machine) ile
-çok bacaklı sitelerde gerçek site kesintilerini tespit eder.
-
-Algoritma Özeti:
-    1. Her site için olaylar kronolojik sırayla işlenir.
-    2. Her olayda ilgili bacağın durumu güncellenir.
-    3. Tüm bacaklar "Disconnected" olduğu anda bir tolerans penceresi
-       (CORRELATION_WINDOW_SECONDS) başlatılır.
-    4. Pencere içinde herhangi bir bacak "Connected" olursa DOWN iptal edilir
-       (bu bir geçici titreme/flap olarak değerlendirilir).
-    5. Pencere kapandığında hâlâ tüm bacaklar DOWN ise "Gerçek DOWN" başlar.
-    6. En az 1 bacak "Connected" olduğunda DOWN biter.
-    7. Dönem sonunda hâlâ DOWN olan siteler, bitiş zamanı = dönem sonu olarak kaydedilir.
-
-Durum Geçişleri:
-    UP ─[tüm bacaklar Disconnected + pencere geçti]─► CANDIDATE ─[pencere kapandı]─► DOWN
-    DOWN ─[en az 1 bacak Connected]─► UP
-    CANDIDATE ─[en az 1 bacak Connected]─► UP  (tolerans devreye girdi)
-"""
-
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 
@@ -42,53 +17,36 @@ from utils.logger import get_logger
 logger = get_logger(__name__)
 
 
-# ---------------------------------------------------------------------------
-# Veri Yapıları
-# ---------------------------------------------------------------------------
-
 @dataclass
 class OutageRecord:
-    """Tek bir gerçek site kesintisini temsil eder."""
+    """Tekil bir site kesinti kaydı."""
     site: str
     start: datetime
     end: datetime
 
     @property
     def duration_minutes(self) -> float:
-        """Kesinti süresini dakika cinsinden döndürür (2 ondalık hassasiyet)."""
+        """Kesinti süresini dakika cinsinden hesaplar."""
         delta = self.end - self.start
         return round(delta.total_seconds() / 60.0, 2)
 
 
 @dataclass
 class _SiteState:
-    """Durum makinesi boyunca bir sitenin anlık durumunu tutar."""
-    # Bacak adı → "Connected" | "Disconnected"
+    """Durum makinesi için anlık site durum verisi."""
     leg_status: dict[tuple[str, str], str] = field(default_factory=dict)
-
-    # Mevcut durum: "UP" | "CANDIDATE" | "DOWN"
     state: str = "UP"
-
-    # CANDIDATE durumuna girildiği zaman (tolerans penceresi başlangıcı)
     candidate_since: datetime | None = None
-
-    # DOWN durumuna girildiği zaman (gerçek kesinti başlangıcı)
     down_since: datetime | None = None
 
     def all_disconnected(self) -> bool:
-        """Tüm bilinen bacaklar Disconnected ise True döndürür."""
         if not self.leg_status:
             return False
         return all(s == "Disconnected" for s in self.leg_status.values())
 
     def any_connected(self) -> bool:
-        """En az 1 bacak Connected ise True döndürür."""
         return any(s == "Connected" for s in self.leg_status.values())
 
-
-# ---------------------------------------------------------------------------
-# Ana Fonksiyon
-# ---------------------------------------------------------------------------
 
 def detect_outages(
     df: pd.DataFrame,
@@ -96,20 +54,7 @@ def detect_outages(
     period_start: datetime,
     period_end: datetime,
 ) -> list[OutageRecord]:
-    """
-    Temizlenmiş log DataFrame'ini ve bacak haritasını kullanarak
-    gerçek site kesintilerinin listesini üretir.
-
-    Args:
-        df: Transformer'dan geçirilmiş, timezone-aware log DataFrame'i.
-        leg_map: `leg_detector.detect_legs()` çıktısı — site → bacak kümesi.
-        period_start: Rapor döneminin başlangıç anı (timezone-aware).
-        period_end: Rapor döneminin bitiş anı (timezone-aware).
-
-    Returns:
-        OutageRecord nesnelerinden oluşan liste.
-        Her kayıt bir gerçek site kesintisini temsil eder.
-    """
+    """Zaman pencereli durum makinesi kullanarak gerçek site kesintilerini tespit eder."""
     logger.info(
         "Kesinti tespiti başlıyor. Dönem: %s → %s",
         period_start.strftime("%Y-%m-%d %H:%M:%S %Z"),
@@ -119,7 +64,6 @@ def detect_outages(
     tolerance = timedelta(seconds=CORRELATION_WINDOW_SECONDS)
     outages: list[OutageRecord] = []
 
-    # Rapor dönemindeki olayları filtrele
     mask = (df[COL_TIME] >= period_start) & (df[COL_TIME] <= period_end)
     df_period = df[mask].copy()
 
@@ -130,27 +74,23 @@ def detect_outages(
         )
         return outages
 
-    # Her site için durum makinesi başlat
+    # Site durumlarını varsayılan olarak UP ile başlat
     site_states: dict[str, _SiteState] = {}
     for site, legs in leg_map.items():
         state = _SiteState()
-        # Başlangıçta tüm bacakları "Connected" kabul et
         for leg in legs:
             state.leg_status[leg] = "Connected"
         site_states[site] = state
 
     logger.debug("%d site için durum makinesi başlatıldı.", len(site_states))
 
-    # -----------------------------------------------------------------------
-    # Olayları kronolojik sırayla işle
-    # -----------------------------------------------------------------------
+    # Olayları kronolojik sırayla işleyerek durum geçişlerini hesapla
     for _, row in df_period.iterrows():
         site: str = row[COL_SITE]
         event_time: datetime = row[COL_TIME]
         event_type: str = row[COL_EVENT]
         leg_key: tuple[str, str] = (row[COL_IFACE], row[COL_ROLE])
 
-        # Bilinmeyen site (bacak haritasında yoksa): dinamik ekle
         if site not in site_states:
             logger.debug(
                 "Bacak haritasında olmayan site bulundu, ekleniyor: '%s'", site
@@ -158,18 +98,12 @@ def detect_outages(
             state = _SiteState()
             state.leg_status[leg_key] = event_type
             site_states[site] = state
-            # Bacak haritasını da güncelle
             leg_map[site] = frozenset({leg_key})
             continue
 
         state = site_states[site]
-
-        # Bacak durumunu güncelle
         state.leg_status[leg_key] = event_type
 
-        # -------------------------------------------------------------------
-        # Durum Makinesi Geçişleri
-        # -------------------------------------------------------------------
         _process_event(
             site=site,
             state=state,
@@ -179,9 +113,7 @@ def detect_outages(
             period_end=period_end,
         )
 
-    # -----------------------------------------------------------------------
-    # Dönem sonu: Hâlâ DOWN olan siteleri kapat
-    # -----------------------------------------------------------------------
+    # Rapor dönemi sonunda açık kalan kesintileri kapat
     for site, state in site_states.items():
         if state.state == "DOWN" and state.down_since is not None:
             rec = OutageRecord(
@@ -199,7 +131,6 @@ def detect_outages(
                 rec.duration_minutes,
             )
         elif state.state == "CANDIDATE" and state.candidate_since is not None:
-            # Tolerans penceresi kapanmadan dönem bitti: yine de DOWN say
             rec = OutageRecord(
                 site=site,
                 start=state.candidate_since,
@@ -227,21 +158,10 @@ def _process_event(
     outages: list[OutageRecord],
     period_end: datetime,
 ) -> None:
-    """
-    Tek bir olayı mevcut site durumuna göre işler ve gerekirse durum geçişi yapar.
-
-    Args:
-        site: Site adı (loglama için).
-        state: Sitenin mevcut _SiteState nesnesi (mutable, yerinde güncellenir).
-        event_time: Olayın gerçekleştiği zaman.
-        tolerance: Korelasyon tolerans süresi (timedelta).
-        outages: Tamamlanan kesintilerin eklendiği liste (mutable).
-        period_end: Rapor dönemi bitiş zamanı (dönem sonu kesintileri için).
-    """
+    """Olay bazlı durum geçişlerini yönetir (UP -> CANDIDATE -> DOWN -> UP)."""
     current_state = state.state
 
     if current_state == "UP":
-        # Tüm bacaklar down mı? → CANDIDATE'e geç
         if state.all_disconnected():
             state.state = "CANDIDATE"
             state.candidate_since = event_time
@@ -257,7 +177,7 @@ def _process_event(
 
         if state.any_connected():
             if elapsed <= tolerance:
-                # Tolerans penceresi içinde bağlandı → flap, iptal et
+                # Tolerans süresi içindeki kısa kopmaları dalgalanma (flap) kabul edip yok say
                 logger.debug(
                     "[%s] CANDIDATE → UP. Bacak Connected geldi (pencere içi, %.1fs), "
                     "tolerans devreye girdi @ %s.",
@@ -266,8 +186,7 @@ def _process_event(
                 state.state = "UP"
                 state.candidate_since = None
             else:
-                # Tolerans penceresi geçtikten SONRA Connected geldi:
-                # Aslında DOWN başlamıştı, şimdi Connected ile bitti
+                # Tolerans süresini aşan kesinti bağlandığında kapatılır
                 rec = OutageRecord(
                     site=site,
                     start=state.candidate_since,
@@ -283,9 +202,8 @@ def _process_event(
                 state.candidate_since = None
 
         elif state.all_disconnected():
-            # Hâlâ tüm bacaklar down; tolerans penceresi geçti mi kontrol et
             if elapsed >= tolerance:
-                # Gerçek DOWN başlıyor; başlangıç = ilk Disconnected anı
+                # Tolerans süresi dolduğunda site gerçek DOWN durumuna geçer
                 state.state = "DOWN"
                 state.down_since = state.candidate_since
                 state.candidate_since = None
@@ -297,7 +215,7 @@ def _process_event(
 
     elif current_state == "DOWN":
         if state.any_connected():
-            # En az 1 bacak tekrar bağlandı → kesinti bitti
+            # En az bir bacak bağlandığında kesintiyi sonlandır
             if state.down_since is not None:
                 rec = OutageRecord(
                     site=site,
@@ -312,4 +230,3 @@ def _process_event(
 
             state.state = "UP"
             state.down_since = None
-

@@ -1,22 +1,3 @@
-"""
-main.py
-=======
-Cato SLA Reporter — CLI giriş noktası ve pipeline orkestratörü.
-
-Kullanım:
-    python main.py --input <CSV_YOLU> --period <1|3> [--mode <manual|auto>] [--output <KLASÖR>]
-
-Örnekler:
-    # Son 30 günü analiz et (Manuel Mod)
-    python main.py --input sample_data/Cato_events_sample.csv --period 1
-
-    # Son 90 günü analiz et, çıktıyı özel klasöre yaz
-    python main.py --input sample_data/Cato_events_sample.csv --period 3 --output ./raporlar
-
-    # Otomatik Mod: bir önceki tam ay (CronJob için)
-    python main.py --input /data/cato_events.csv --period 1 --mode auto
-"""
-
 import argparse
 import sys
 import datetime as _dt
@@ -37,15 +18,7 @@ logger = get_logger(__name__)
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
-    """
-    Komut satırı argümanlarını ayrıştırır ve doğrular.
-
-    Args:
-        argv: Argüman listesi. None ise sys.argv[1:] kullanılır.
-
-    Returns:
-        Ayrıştırılmış argüman namespace'i.
-    """
+    """Komut satırı parametrelerini ayrıştırır."""
     parser = argparse.ArgumentParser(
         prog="cato-sla-reporter",
         description=(
@@ -101,31 +74,12 @@ def resolve_period_dates(
     mode: str,
     now: datetime | None = None,
 ) -> tuple[datetime, datetime]:
-    """
-    Çalışma moduna göre rapor döneminin başlangıç ve bitiş tarihlerini hesaplar.
-
-    Manuel Mod:
-        - 1 ay → Bugünden 30 gün öncesi (00:00:00) → Bugün (23:59:59)
-        - 3 ay → Bugünden 90 gün öncesi (00:00:00) → Bugün (23:59:59)
-
-    Otomatik Mod:
-        - 1 ay → Önceki takvim ayının 1'i (00:00:00) → Sonu (23:59:59)
-        - 3 ay → Önceki takvim çeyreğinin ilk günü → Sonu (23:59:59)
-
-    Args:
-        period_months: 1 veya 3.
-        mode: "manual" veya "auto".
-        now: Override için mevcut zaman (test amacıyla). None ise gerçek zaman.
-
-    Returns:
-        (period_start, period_end) — her ikisi de Europe/Istanbul timezone-aware.
-    """
-
+    """Çalışma moduna göre raporlama başlangıç ve bitiş tarihlerini hesaplar."""
     now_local = now or datetime.now(tz=TZ)
     today = now_local.date()
 
     if mode == "manual":
-        days_back = 30 * period_months  # 30 veya 90 gün
+        days_back = 30 * period_months
         start_date = today - timedelta(days=days_back)
         period_start = datetime(
             start_date.year, start_date.month, start_date.day,
@@ -138,7 +92,6 @@ def resolve_period_dates(
 
     elif mode == "auto":
         if period_months == 1:
-            # Önceki ay
             first_of_this_month = today.replace(day=1)
             last_month_end = first_of_this_month - timedelta(days=1)
             last_month_start = last_month_end.replace(day=1)
@@ -152,11 +105,9 @@ def resolve_period_dates(
                 23, 59, 59, tzinfo=TZ,
             )
 
-        else:  # period_months == 3
-            # Önceki tam çeyrek
-            current_quarter = (today.month - 1) // 3  # 0-3
+        else:
+            current_quarter = (today.month - 1) // 3
             if current_quarter == 0:
-                # Q4 of previous year
                 q_start_month = 10
                 q_end_month = 12
                 q_year = today.year - 1
@@ -182,12 +133,7 @@ def resolve_period_dates(
 
 
 def run(args: argparse.Namespace) -> None:
-    """
-    Ana pipeline'ı çalıştırır.
-
-    Args:
-        args: parse_args() çıktısı.
-    """
+    """Tüm analiz ve raporlama pipeline'ını sırasıyla çalıştırır."""
     logger.info("=" * 60)
     logger.info("Cato SLA Reporter başlatıldı.")
     logger.info(
@@ -196,17 +142,13 @@ def run(args: argparse.Namespace) -> None:
     )
     logger.info("=" * 60)
 
-    # -----------------------------------------------------------------------
-    # Adım 1: Rapor dönemini belirle
-    # -----------------------------------------------------------------------
+    # 1. Raporlama dönemini hesapla
     period_start, period_end = resolve_period_dates(
         period_months=args.period,
         mode=args.mode,
     )
 
-    # -----------------------------------------------------------------------
-    # Adım 2: CSV oku
-    # -----------------------------------------------------------------------
+    # 2. Log dosyasını okut
     reader = CsvLogReader(args.input)
     raw_df = reader.read()
 
@@ -214,9 +156,7 @@ def run(args: argparse.Namespace) -> None:
         logger.error("Veri okunamadı veya CSV boş. İşlem durduruluyor.")
         sys.exit(1)
 
-    # -----------------------------------------------------------------------
-    # Adım 3: Dönüştür (UTC → Istanbul, temizleme, sıralama)
-    # -----------------------------------------------------------------------
+    # 3. Veriyi dönüştür ve temizle
     clean_df = transform(raw_df)
 
     if clean_df.empty:
@@ -226,9 +166,7 @@ def run(args: argparse.Namespace) -> None:
         )
         sys.exit(1)
 
-    # -----------------------------------------------------------------------
-    # Adım 4: Bacak haritasını oluştur
-    # -----------------------------------------------------------------------
+    # 4. Site bacaklarını tespit et
     leg_map = detect_legs(clean_df)
 
     if not leg_map:
@@ -237,9 +175,7 @@ def run(args: argparse.Namespace) -> None:
 
     all_sites = list(leg_map.keys())
 
-    # -----------------------------------------------------------------------
-    # Adım 5: Kesintileri tespit et (State Machine)
-    # -----------------------------------------------------------------------
+    # 5. Kesinti analizi yap (State Machine)
     outages = detect_outages(
         df=clean_df,
         leg_map=leg_map,
@@ -247,18 +183,14 @@ def run(args: argparse.Namespace) -> None:
         period_end=period_end,
     )
 
-    # -----------------------------------------------------------------------
-    # Adım 6: SLA hesapla
-    # -----------------------------------------------------------------------
+    # 6. SLA ve Availability değerlerini hesapla
     summary_df = calculate_sla(
         outages=outages,
         all_sites=all_sites,
         period_months=args.period,
     )
 
-    # -----------------------------------------------------------------------
-    # Adım 7: Excel'e yaz
-    # -----------------------------------------------------------------------
+    # 7. Excel raporunu oluştur
     output_path = export_to_excel(
         summary_df=summary_df,
         outages=outages,
@@ -267,16 +199,17 @@ def run(args: argparse.Namespace) -> None:
         report_date=date.today(),
     )
 
-    # -----------------------------------------------------------------------
-    # Özet
-    # -----------------------------------------------------------------------
+    # Özet konsol çıktısı
     logger.info("=" * 60)
     logger.info("İşlem tamamlandı.")
     logger.info("Rapor dönemi : %s", PERIOD_LABELS[args.period])
     logger.info("Toplam site  : %d", len(summary_df))
     logger.info(
-        "Passed / Failed: %d / %d",
+        "SLA Eşiğini Geçen Site (Passed) : %d",
         (summary_df["SLA Durumu"] == "Passed").sum(),
+    )
+    logger.info(
+        "SLA Eşiğini Geçemeyen (Failed) : %d",
         (summary_df["SLA Durumu"] == "Failed").sum(),
     )
     logger.info("Rapor dosyası: %s", output_path.resolve())
@@ -284,7 +217,7 @@ def run(args: argparse.Namespace) -> None:
 
 
 def main() -> None:
-    """Giriş noktası."""
+    """Uygulama giriş noktası."""
     try:
         args = parse_args()
         run(args)

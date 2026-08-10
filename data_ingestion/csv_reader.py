@@ -1,15 +1,3 @@
-"""
-data_ingestion/csv_reader.py
-=============================
-Cato Networks CSV log dosyasını okuyan somut okuyucu sınıfı.
-
-Sorumluluklar:
-    - CSV dosyasını pandas ile okumak
-    - Zorunlu sütunların varlığını doğrulamak
-    - Beklenmedik event_sub_type değerlerini loglamak ve filtrelemek
-    - Ham pd.DataFrame döndürmek (dönüşüm yapmaz — transformer'a bırakılır)
-"""
-
 from pathlib import Path
 
 import pandas as pd
@@ -26,35 +14,16 @@ logger = get_logger(__name__)
 
 
 class CsvLogReader(BaseLogReader):
-    """
-    Cato Networks CSV formatındaki log dosyasını okuyan sınıf.
-
-    Args:
-        file_path: Okunacak CSV dosyasının yolu (str veya Path).
-
-    Example:
-        >>> reader = CsvLogReader("sample_data/Cato_events_sample.csv")
-        >>> df = reader.read()
-    """
+    """Cato Networks CSV log okuyucusu."""
 
     def __init__(self, file_path: str | Path) -> None:
         self._path = Path(file_path)
 
     def read(self) -> pd.DataFrame:
-        """
-        CSV dosyasını okur ve doğrulama yaparak ham DataFrame döndürür.
-
-        Returns:
-            Doğrulanmış ham log pd.DataFrame.
-
-        Raises:
-            FileNotFoundError: Dosya bulunamadığında.
-            ValueError: Zorunlu sütunlar eksikse.
-            RuntimeError: Okuma sırasında beklenmedik hata oluştuğunda.
-        """
+        """CSV dosyasını doğrular, geçerli log kayıtlarını DataFrame olarak döndürür."""
         logger.info("CSV okunuyor: %s", self._path)
 
-        # --- Dosya varlığı kontrolü -------------------------------------------
+        # Dosya varlık kontrolü
         if not self._path.exists():
             raise FileNotFoundError(
                 f"CSV dosyası bulunamadı: '{self._path}'. "
@@ -64,12 +33,11 @@ class CsvLogReader(BaseLogReader):
         if not self._path.is_file():
             raise ValueError(f"Belirtilen yol bir dosya değil: '{self._path}'")
 
-        # --- Okuma -----------------------------------------------------------
         try:
             df = pd.read_csv(
                 self._path,
                 low_memory=False,
-                dtype=str,          # Tüm sütunları string olarak oku; dönüşümler transformer'a bırakılır
+                dtype=str,
             )
         except Exception as exc:
             raise RuntimeError(
@@ -78,15 +46,13 @@ class CsvLogReader(BaseLogReader):
 
         logger.debug("Okunan satır sayısı: %d", len(df))
 
-        # --- Boş dosya kontrolü ----------------------------------------------
         if df.empty:
             logger.warning("CSV dosyası boş veya yalnızca başlık satırı içeriyor.")
             return df
 
-        # --- Sütun adlarını normalize et (baş/son boşluklar) ----------------
+        # Sütun isimlerini ve zorunlu alanları doğrula
         df.columns = df.columns.str.strip()
 
-        # --- Zorunlu sütun kontrolü ------------------------------------------
         missing_cols = [c for c in REQUIRED_COLUMNS if c not in df.columns]
         if missing_cols:
             raise ValueError(
@@ -94,10 +60,9 @@ class CsvLogReader(BaseLogReader):
                 f"Mevcut sütunlar: {df.columns.tolist()}"
             )
 
-        # --- Yalnızca gerekli sütunları al -----------------------------------
         df = df[REQUIRED_COLUMNS].copy()
 
-        # --- event_sub_type doğrulama & filtreleme ----------------------------
+        # Geçersiz olay tiplerini ayıkla
         original_count = len(df)
         unexpected_mask = ~df[COL_EVENT].str.strip().isin(VALID_EVENT_TYPES)
         unexpected_count = unexpected_mask.sum()

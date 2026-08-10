@@ -9,15 +9,15 @@ LegMap = dict[str, frozenset[tuple[str, str]]]
 
 
 def detect_legs(df: pd.DataFrame) -> LegMap:
-    """Log kayıtlarından her siteye ait benzersiz bacak (interface + role) kümesini tespit eder."""
+    """Log kayitlarindan her siteye ait benzersiz bacak (interface + role) kumesini tespit eder."""
     if df.empty:
-        logger.warning("Boş DataFrame alındı; bacak tespiti yapılamıyor.")
+        logger.warning("Bos DataFrame alindi; bacak tespiti yapilamiyor.")
         return {}
 
     required = {COL_SITE, COL_IFACE, COL_ROLE}
     missing = required - set(df.columns)
     if missing:
-        raise ValueError(f"Bacak tespiti için gerekli sütunlar eksik: {missing}")
+        raise ValueError(f"Bacak tespiti icin gerekli sutunlar eksik: {missing}")
 
     leg_map: LegMap = {}
 
@@ -35,8 +35,8 @@ def detect_legs(df: pd.DataFrame) -> LegMap:
         )
 
     logger.info(
-        "%d site için bacak haritası oluşturuldu. "
-        "(Tek bacaklı: %d, Çok bacaklı: %d)",
+        "%d site için bacak haritasi olusturuldu. "
+        "(Tek bacakli: %d, Cok bacakli: %d)",
         len(leg_map),
         sum(1 for legs in leg_map.values() if len(legs) == 1),
         sum(1 for legs in leg_map.values() if len(legs) > 1),

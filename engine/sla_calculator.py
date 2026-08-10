@@ -24,7 +24,7 @@ def calculate_sla(
     all_sites: list[str],
     period_months: int,
 ) -> pd.DataFrame:
-    """Kesinti kayıtlarından site bazlı erişilebilirlik (%) ve SLA durumunu hesaplar."""
+    """Kesinti kayitlarindan site bazli erisilebilirlik (%) ve SLA durumunu hesaplar."""
     if period_months not in PERIOD_MINUTES:
         raise ValueError(
             f"Geçersiz rapor dönemi: {period_months}. "
@@ -35,7 +35,7 @@ def calculate_sla(
     period_label = PERIOD_LABELS[period_months]
 
     logger.info(
-        "SLA hesabı başlıyor. Dönem: %s | Toplam dk: %d | Eşik: %%%s",
+        "SLA hesabi basliyor. Dönem: %s | Toplam dk: %d | Eşik: %%%s",
         period_label, total_minutes, SLA_THRESHOLD_PCT,
     )
 
@@ -82,10 +82,10 @@ def calculate_sla(
         passed = (summary_df[COL_OUT_SLA] == "Passed").sum()
         failed = (summary_df[COL_OUT_SLA] == "Failed").sum()
         logger.info(
-            "SLA hesabı tamamlandı. Toplam site: %d | Passed: %d | Failed: %d",
+            "SLA hesabi tamamlandi. Toplam site: %d | Passed: %d | Failed: %d",
             len(summary_df), passed, failed,
         )
     else:
-        logger.warning("Hesaplanacak site bulunamadı; boş DataFrame döndürülüyor.")
+        logger.warning("Hesaplanacak site bulunamadi; bos DataFrame donduruluyor.")
 
     return summary_df

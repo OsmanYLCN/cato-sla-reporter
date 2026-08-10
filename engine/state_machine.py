@@ -19,7 +19,7 @@ logger = get_logger(__name__)
 
 @dataclass
 class OutageRecord:
-    """Tekil bir site kesinti kaydı."""
+    """Tekil bir site kesinti kaydi."""
     site: str
     start: datetime
     end: datetime
@@ -33,7 +33,7 @@ class OutageRecord:
 
 @dataclass
 class _SiteState:
-    """Durum makinesi için anlık site durum verisi."""
+    """Durum makinesi icin anlik site durum verisi."""
     leg_status: dict[tuple[str, str], str] = field(default_factory=dict)
     state: str = "UP"
     candidate_since: datetime | None = None
@@ -54,9 +54,9 @@ def detect_outages(
     period_start: datetime,
     period_end: datetime,
 ) -> list[OutageRecord]:
-    """Zaman pencereli durum makinesi kullanarak gerçek site kesintilerini tespit eder."""
+    """Zaman pencereli durum makinesi kullanarak gercek site kesintilerini tespit eder."""
     logger.info(
-        "Kesinti tespiti başlıyor. Dönem: %s → %s",
+        "Kesinti tespiti basliyor. Dönem: %s → %s",
         period_start.strftime("%Y-%m-%d %H:%M:%S %Z"),
         period_end.strftime("%Y-%m-%d %H:%M:%S %Z"),
     )
@@ -69,7 +69,7 @@ def detect_outages(
 
     if df_period.empty:
         logger.warning(
-            "Rapor döneminde (%s → %s) hiç log kaydı bulunamadı.",
+            "Rapor döneminde (%s → %s) hic log kaydi bulunamadi.",
             period_start, period_end,
         )
         return outages
@@ -82,7 +82,7 @@ def detect_outages(
             state.leg_status[leg] = "Connected"
         site_states[site] = state
 
-    logger.debug("%d site için durum makinesi başlatıldı.", len(site_states))
+    logger.debug("%d site icin durum makinesi baslatildi.", len(site_states))
 
     # Olayları kronolojik sırayla işleyerek durum geçişlerini hesapla
     for _, row in df_period.iterrows():
@@ -93,7 +93,7 @@ def detect_outages(
 
         if site not in site_states:
             logger.debug(
-                "Bacak haritasında olmayan site bulundu, ekleniyor: '%s'", site
+                "Bacak haritasinda olmayan site bulundu, ekleniyor: '%s'", site
             )
             state = _SiteState()
             state.leg_status[leg_key] = event_type
@@ -123,8 +123,8 @@ def detect_outages(
             )
             outages.append(rec)
             logger.debug(
-                "[%s] Dönem sonunda açık kesinti kapatıldı. "
-                "Başlangıç: %s | Bitiş (dönem sonu): %s | Süre: %.2f dk",
+                "[%s] Donem sonunda acik kesinti kapatildi. "
+                "Baslangic: %s | Bitis (donem sonu): %s | Sure: %.2f dk",
                 site,
                 state.down_since,
                 period_end,
@@ -139,13 +139,13 @@ def detect_outages(
             outages.append(rec)
             logger.debug(
                 "[%s] CANDIDATE durumunda dönem bitti; DOWN olarak kaydedildi. "
-                "Süre: %.2f dk",
+                "Sure: %.2f dk",
                 site,
                 rec.duration_minutes,
             )
 
     logger.info(
-        "Kesinti tespiti tamamlandı. Toplam gerçek kesinti: %d", len(outages)
+        "Kesinti tespiti tamamlandi. Toplam gercek kesinti: %d", len(outages)
     )
     return outages
 
@@ -158,7 +158,7 @@ def _process_event(
     outages: list[OutageRecord],
     period_end: datetime,
 ) -> None:
-    """Olay bazlı durum geçişlerini yönetir (UP -> CANDIDATE -> DOWN -> UP)."""
+    """Olay bazli durum gecislerini yonetir (UP -> CANDIDATE -> DOWN -> UP)."""
     current_state = state.state
 
     if current_state == "UP":
@@ -166,7 +166,7 @@ def _process_event(
             state.state = "CANDIDATE"
             state.candidate_since = event_time
             logger.debug(
-                "[%s] UP → CANDIDATE. Tüm bacaklar Disconnected @ %s. "
+                "[%s] UP → CANDIDATE. Tum bacaklar Disconnected @ %s. "
                 "Tolerans penceresi: %ds.",
                 site, event_time, CORRELATION_WINDOW_SECONDS,
             )
@@ -179,7 +179,7 @@ def _process_event(
             if elapsed <= tolerance:
                 # Tolerans süresi içindeki kısa kopmaları dalgalanma (flap) kabul edip yok say
                 logger.debug(
-                    "[%s] CANDIDATE → UP. Bacak Connected geldi (pencere içi, %.1fs), "
+                    "[%s] CANDIDATE → UP. Bacak Connected geldi (pencere ici, %.1fs), "
                     "tolerans devreye girdi @ %s.",
                     site, elapsed.total_seconds(), event_time,
                 )
@@ -194,8 +194,8 @@ def _process_event(
                 )
                 outages.append(rec)
                 logger.debug(
-                    "[%s] CANDIDATE → UP (geç toparlanma). "
-                    "Gerçek kesinti: %s → %s (%.2f dk)",
+                    "[%s] CANDIDATE → UP (gec toparlanma). "
+                    "Gercek kesinti: %s → %s (%.2f dk)",
                     site, state.candidate_since, event_time, rec.duration_minutes,
                 )
                 state.state = "UP"
@@ -208,8 +208,8 @@ def _process_event(
                 state.down_since = state.candidate_since
                 state.candidate_since = None
                 logger.debug(
-                    "[%s] CANDIDATE → DOWN. Tolerans aşıldı (%.1fs). "
-                    "Gerçek kesinti başlangıcı: %s",
+                    "[%s] CANDIDATE → DOWN. Tolerans asildi (%.1fs). "
+                    "Gercek kesinti baslangici: %s",
                     site, elapsed.total_seconds(), state.down_since,
                 )
 

@@ -1,4 +1,3 @@
-import pytest
 import pandas as pd
 from datetime import timezone
 from zoneinfo import ZoneInfo

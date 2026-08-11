@@ -7,7 +7,7 @@ logger = get_logger(__name__)
 
 
 class GraphQLLogReader(BaseLogReader):
-    """Cato Networks GraphQL API okuyucusu (ilerideki entegrasyon için taslak)."""
+    """Cato Networks GraphQL API okuyucusu (taslak)."""
 
     def __init__(
         self,
@@ -22,11 +22,10 @@ class GraphQLLogReader(BaseLogReader):
     def read(self) -> pd.DataFrame:
         """API entegrasyonu henüz tamamlanmadığı için hata fırlatır."""
         logger.error(
-            "GraphQLLogReader henüz implement edilmemiştir. "
             "Şu an yalnızca CSV girişi desteklenmektedir."
         )
         raise NotImplementedError(
-            "GraphQL entegrasyonu henüz geliştirilme aşamasındadır. "
+            "GraphQL entegrasyonu henüz yok. "
             "Lütfen şimdilik --input parametresi ile CSV dosyası kullanın."
         )
 

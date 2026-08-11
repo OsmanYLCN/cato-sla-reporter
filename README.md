@@ -1,6 +1,6 @@
 # Cato Networks SLA & Availability Reporter System
 
-A modular Python tool to calculate monthly and quarterly SLA/Availability metrics for sites connected to Cato Networks. 
+A modular Python tool to calculate monthly and quarterly SLA/Availability metrics for sites connected to Cato Network Systems. 
 
 For sites with multiple WAN links or HA configurations, the tool verifies if all interfaces are down simultaneously before recording a true outage, applying a time-window tolerance to filter out transient connection flaps.
 

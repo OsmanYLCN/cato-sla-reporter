@@ -53,7 +53,7 @@ python main.py --input /path/to/events.csv --period 1 --mode auto
   * **Target SLA**: `99.90%`. Sites with availability below this are marked as `Failed`; otherwise `Passed`.
   * **Total Period Minutes**: Fixed at `43200` (1 Month) and `129600` (3 Months).
 
-## Output
+## Outputs
 
 The tool generates `output/SLA_Report_<Period>M_<Date>.xlsx` containing:
 1. **SLA Summary**: Site metrics (Downtime, Availability %, and SLA Status highlighted in green/red).

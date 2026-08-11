@@ -5,7 +5,7 @@ from datetime import date, datetime, timedelta, timezone
 from calendar import monthrange
 from zoneinfo import ZoneInfo
 
-from config.settings import PERIOD_LABELS, TZ
+from config.settings import COL_TIME, PERIOD_LABELS, TZ
 from data_ingestion.csv_reader import CsvLogReader
 from engine.leg_detector import detect_legs
 from engine.sla_calculator import calculate_sla
@@ -166,8 +166,12 @@ def run(args: argparse.Namespace) -> None:
         )
         sys.exit(1)
 
-    # 4. Site bacaklarını tespit et
-    leg_map = detect_legs(clean_df)
+    # 4. Site bacaklarını tespit et (yalnızca dönem içindeki verilerden)
+    period_mask = (
+        (clean_df[COL_TIME] >= period_start)
+        & (clean_df[COL_TIME] <= period_end)
+    )
+    leg_map = detect_legs(clean_df[period_mask])
 
     if not leg_map:
         logger.error("Hiç site tespit edilemedi. İşlem durduruluyor.")

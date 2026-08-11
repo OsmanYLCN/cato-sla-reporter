@@ -63,6 +63,7 @@ def detect_outages(
 
     tolerance = timedelta(seconds=CORRELATION_WINDOW_SECONDS)
     outages: list[OutageRecord] = []
+    leg_map = dict(leg_map)  # çağıranın leg_map'ini mutate etmemek için yerel kopya
 
     mask = (df[COL_TIME] >= period_start) & (df[COL_TIME] <= period_end)
     df_period = df[mask].copy()
@@ -85,11 +86,11 @@ def detect_outages(
     logger.debug("%d site icin durum makinesi baslatildi.", len(site_states))
 
     # Olayları kronolojik sırayla işleyerek durum geçişlerini hesapla
-    for _, row in df_period.iterrows():
-        site: str = row[COL_SITE]
-        event_time: datetime = row[COL_TIME]
-        event_type: str = row[COL_EVENT]
-        leg_key: tuple[str, str] = (row[COL_IFACE], row[COL_ROLE])
+    for row in df_period.itertuples(index=False):
+        site: str = getattr(row, COL_SITE)
+        event_time: datetime = getattr(row, COL_TIME)
+        event_type: str = getattr(row, COL_EVENT)
+        leg_key: tuple[str, str] = (getattr(row, COL_IFACE), getattr(row, COL_ROLE))
 
         if site not in site_states:
             logger.debug(
@@ -172,7 +173,10 @@ def _process_event(
             )
 
     elif current_state == "CANDIDATE":
-        assert state.candidate_since is not None
+        if state.candidate_since is None:
+            raise RuntimeError(
+                f"[{site}] CANDIDATE durumunda candidate_since None olamaz."
+            )
         elapsed = event_time - state.candidate_since
 
         if state.any_connected():

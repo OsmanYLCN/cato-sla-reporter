@@ -1,4 +1,4 @@
-# Cato Networks SLA & Availability Reporter
+# Cato Networks SLA & Availability Reporter System
 
 A modular Python tool to calculate monthly and quarterly SLA/Availability metrics for sites connected to Cato Networks. 
 

@@ -11,7 +11,6 @@ from openpyxl.styles import (
     Side,
 )
 from openpyxl.utils import get_column_letter
-from openpyxl.utils.dataframe import dataframe_to_rows
 
 from config.settings import (
     COLOR_FAILED_BG,

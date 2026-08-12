@@ -19,6 +19,18 @@ COL_OUT_AVAIL = "Availability (%)"
 COL_OUT_SLA = "SLA Durumu"
 
 
+def _merge_site_intervals(records: list[OutageRecord]) -> list[tuple]:
+    """Ayni site icin cakisan kesinti araliklerini birlestirir."""
+    intervals = sorted((r.start, r.end) for r in records)
+    merged: list[list] = []
+    for start, end in intervals:
+        if merged and start <= merged[-1][1]:
+            merged[-1][1] = max(merged[-1][1], end)
+        else:
+            merged.append([start, end])
+    return [(s, e) for s, e in merged]
+
+
 def calculate_sla(
     outages: list[OutageRecord],
     all_sites: list[str],
@@ -39,14 +51,19 @@ def calculate_sla(
         period_label, total_minutes, SLA_THRESHOLD_PCT,
     )
 
-    # Kesintileri site bazında grupla ve topla
-    site_stats: dict[str, dict] = {}
-
+    # Kesintileri site bazında grupla, çakışan aralıkları birleştir, süreyi hesapla
+    site_outages: dict[str, list[OutageRecord]] = {}
     for record in outages:
-        if record.site not in site_stats:
-            site_stats[record.site] = {"count": 0, "total_minutes": 0.0}
-        site_stats[record.site]["count"] += 1
-        site_stats[record.site]["total_minutes"] += record.duration_minutes
+        site_outages.setdefault(record.site, []).append(record)
+
+    site_stats: dict[str, dict] = {}
+    for site, records in site_outages.items():
+        merged = _merge_site_intervals(records)
+        total_secs = sum((e - s).total_seconds() for s, e in merged)
+        site_stats[site] = {
+            "count": len(records),
+            "total_minutes": total_secs / 60.0,
+        }
 
     # Her site için Availability (%) ve Passed/Failed durumunu hesapla
     rows: list[dict] = []

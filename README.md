@@ -20,7 +20,7 @@ Calculates SLA for a rolling period (last 30 or 90 days) from today.
 python main.py --input sample_data/Cato_events_sample.csv --period 1
 
 # Last 90 days
-python main.py --input sample_data/Cato_events_sample.csv --period 3 --output ./reports
+python main.py --input sample_data/Cato_events_sample.csv --period 3
 ```
 
 ### 2. Auto Mode (for Cron / Schedulers)

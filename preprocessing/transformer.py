@@ -19,11 +19,11 @@ _TZ = ZoneInfo(TIMEZONE)
 
 
 def transform(df: pd.DataFrame) -> pd.DataFrame:
-    """Ham log verisini temizler, UTC zaman bilgisini Europe/Istanbul saat dilimine çevirir."""
-    logger.info("Veri dönüşümü başlıyor. Girdi satır sayısı: %d", len(df))
+    """Ham log verisini temizler, UTC zaman bilgisini Europe/Istanbul saat dilimine cevirir."""
+    logger.info("Veri donusumu basliyor. Girdi satir sayisi: %d", len(df))
 
     if df.empty:
-        logger.warning("Boş DataFrame alındı; dönüşüm atlanıyor.")
+        logger.warning("Bos DataFrame alindi; donusum atlaniyor.")
         return df
 
     df = df.copy()
@@ -33,28 +33,28 @@ def transform(df: pd.DataFrame) -> pd.DataFrame:
         if col in df.columns:
             df[col] = df[col].str.strip()
 
-    logger.debug("String normalizasyonu tamamlandı.")
+    logger.debug("String normalizasyonu tamamlandi.")
 
     # UTC zaman verisini parse et
     try:
         df[COL_TIME] = pd.to_datetime(df[COL_TIME], utc=True, errors="coerce")
     except Exception as exc:
         raise ValueError(
-            f"`{COL_TIME}` sütunu datetime formatına dönüştürülemedi: {exc}"
+            f"`{COL_TIME}` sutunu datetime formatina donusturulemedi: {exc}"
         ) from exc
 
     invalid_time_count = df[COL_TIME].isna().sum()
     if invalid_time_count > 0:
         logger.warning(
-            "%d satır geçersiz zaman damgası nedeniyle atılıyor.", invalid_time_count
+            "%d satir gecersiz zaman damgasi nedeniyle atiliyor.", invalid_time_count
         )
         df = df.dropna(subset=[COL_TIME])
 
-    logger.debug("UTC datetime dönüşümü tamamlandı.")
+    logger.debug("UTC datetime donusumu tamamlandi.")
 
     # Saat dilimini dönüştür (UTC -> Europe/Istanbul)
     df[COL_TIME] = df[COL_TIME].dt.tz_convert(_TZ)
-    logger.debug("Saat dilimi dönüşümü tamamlandı: UTC → %s", TIMEZONE)
+    logger.debug("Saat dilimi donusumu tamamlandi: UTC → %s", TIMEZONE)
 
     # Eksik veya geçersiz verileri temizle
     critical_cols = [COL_SITE, COL_EVENT, COL_IFACE, COL_ROLE]
@@ -63,7 +63,7 @@ def transform(df: pd.DataFrame) -> pd.DataFrame:
     null_dropped = before_null_drop - len(df)
     if null_dropped > 0:
         logger.warning(
-            "%d satır kritik sütunlardaki null değer nedeniyle atıldı.", null_dropped
+            "%d satir kritik sutunlardaki null deger nedeniyle atildi.", null_dropped
         )
 
     for col in critical_cols:
@@ -71,7 +71,7 @@ def transform(df: pd.DataFrame) -> pd.DataFrame:
         empty_count = empty_mask.sum()
         if empty_count > 0:
             logger.warning(
-                "'%s' sütununda %d boş string değeri atılıyor.", col, empty_count
+                "'%s' sutununda %d bos string degeri atiliyor.", col, empty_count
             )
             df = df[~empty_mask]
 
@@ -80,12 +80,12 @@ def transform(df: pd.DataFrame) -> pd.DataFrame:
     df = df.drop_duplicates()
     dedup_count = before_dedup - len(df)
     if dedup_count > 0:
-        logger.debug("%d duplicate satır kaldırıldı.", dedup_count)
+        logger.debug("%d duplicate satir kaldirildi.", dedup_count)
 
     df = df.sort_values(by=COL_TIME, ascending=True).reset_index(drop=True)
 
     logger.info(
-        "Dönüşüm tamamlandı. Çıktı satır sayısı: %d (atılan: %d).",
+        "Donusum tamamlandi. Cikti satir sayisi: %d (atilan: %d).",
         len(df),
         before_null_drop - len(df) + invalid_time_count + null_dropped,
     )

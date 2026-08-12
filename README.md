@@ -20,7 +20,7 @@ Calculates SLA for a rolling period (last 30 or 90 days) from today.
 python main.py --input sample_data/Cato_events_sample.csv --period 1
 
 # Last 90 days
-python main.py --input sample_data/Cato_events_sample.csv --period 3 --output ./reports
+python main.py --input sample_data/Cato_events_sample.csv --period 3
 ```
 
 ### 2. Auto Mode (for Cron / Schedulers)
@@ -49,7 +49,7 @@ python main.py --input /path/to/events.csv --period 1 --mode auto
   * **Net Downtime**: Calculated as the duration between the initial disconnect (after tolerance passes) and the first interface recovery.
   * **Open Outages**: Outages still active at the end of the reporting period are calculated up to the period end boundary.
 * **Availability Formula**:
-  $$\text{Availability (\%)} = \frac{\text{Total Period Minutes} - \text{Total Downtime}}{\text{Total Period Minutes}} \times 100$$
+  $$\text{Availability} = \frac{\text{Total Period Minutes} - \text{Total Downtime}}{\text{Total Period Minutes}} \times 100$$
   * **Target SLA**: `99.90%`. Sites with availability below this are marked as `Failed`; otherwise `Passed`.
   * **Total Period Minutes**: Fixed at `43200` (1 Month) and `129600` (3 Months).
 

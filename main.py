@@ -1,7 +1,6 @@
 import argparse
 import sys
-import datetime as _dt
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, timedelta
 from calendar import monthrange
 from zoneinfo import ZoneInfo
 

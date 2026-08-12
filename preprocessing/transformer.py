@@ -87,7 +87,7 @@ def transform(df: pd.DataFrame) -> pd.DataFrame:
     logger.info(
         "Donusum tamamlandi. Cikti satir sayisi: %d (atilan: %d).",
         len(df),
-        before_null_drop - len(df) + invalid_time_count + null_dropped,
+        invalid_time_count + (before_null_drop - len(df)),
     )
 
     return df

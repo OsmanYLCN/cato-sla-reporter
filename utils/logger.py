@@ -33,7 +33,7 @@ def get_logger(name: str) -> logging.Logger:
     if logger.handlers:
         return logger
 
-    logger.setLevel(logging.DEBUG)
+    logger.setLevel(getattr(logging, LOG_LEVEL, logging.DEBUG))
 
     # Konsol çıktısı yapılandırması
     console_handler = logging.StreamHandler(sys.stdout)

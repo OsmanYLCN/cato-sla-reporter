@@ -18,7 +18,7 @@ COL_OUT_DURATION = "Toplam Kesinti Süresi (Dakika)"
 COL_OUT_AVAIL = "Availability (%)"
 COL_OUT_SLA = "SLA Durumu"
 
-
+# Site aralıklarını birleştirme
 def _merge_site_intervals(records: list[OutageRecord]) -> list[tuple]:
     """Ayni site icin cakisan kesinti araliklerini birlestirir."""
     intervals = sorted((r.start, r.end) for r in records)
@@ -30,7 +30,7 @@ def _merge_site_intervals(records: list[OutageRecord]) -> list[tuple]:
             merged.append([start, end])
     return [(s, e) for s, e in merged]
 
-
+# SLA hesaplama
 def calculate_sla(
     outages: list[OutageRecord],
     all_sites: list[str],

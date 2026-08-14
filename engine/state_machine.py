@@ -16,7 +16,7 @@ from utils.logger import get_logger
 
 logger = get_logger(__name__)
 
-
+# Kesinti kaydı ve durum makinesi sınıfları
 @dataclass
 class OutageRecord:
     """Tekil bir site kesinti kaydi."""
@@ -30,7 +30,7 @@ class OutageRecord:
         delta = self.end - self.start
         return round(delta.total_seconds() / 60.0, 2)
 
-
+# Site durum makinesi sınıfı
 @dataclass
 class _SiteState:
     """Durum makinesi icin anlik site durum verisi."""
@@ -47,7 +47,7 @@ class _SiteState:
     def any_connected(self) -> bool:
         return any(s == "Connected" for s in self.leg_status.values())
 
-
+# Kesinti tespiti
 def detect_outages(
     df: pd.DataFrame,
     leg_map: LegMap,
@@ -150,7 +150,7 @@ def detect_outages(
     )
     return outages
 
-
+# Olay bazlı durum geçişlerini yöneten yardımcı fonksiyon
 def _process_event(
     site: str,
     state: _SiteState,

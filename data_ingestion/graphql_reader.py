@@ -5,7 +5,7 @@ from utils.logger import get_logger
 
 logger = get_logger(__name__)
 
-
+# Cato Networks GraphQL API okuyucusu (taslak)
 class GraphQLLogReader(BaseLogReader):
     """Cato Networks GraphQL API okuyucusu (taslak)."""
 

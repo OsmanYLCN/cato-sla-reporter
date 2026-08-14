@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 
 import pandas as pd
 
-
+# Veri okuma modülleri için soyut taban sınıf
 class BaseLogReader(ABC):
     """Log okuyucu modüller için soyut taban sınıf."""
 

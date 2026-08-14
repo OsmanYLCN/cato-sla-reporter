@@ -37,7 +37,7 @@ from utils.logger import get_logger
 
 logger = get_logger(__name__)
 
-# Excel tablo hücre ve kenarlık stilleri
+# Excel tablo stilleri
 _THIN_SIDE = Side(style="thin", color="FFB8CCE4")
 _THIN_BORDER = Border(
     left=_THIN_SIDE, right=_THIN_SIDE, top=_THIN_SIDE, bottom=_THIN_SIDE
@@ -52,7 +52,7 @@ _HEADER_FONT = Font(bold=True, color=COLOR_HEADER_FONT, name="Calibri", size=11)
 _CENTER = Alignment(horizontal="center", vertical="center", wrap_text=False)
 _LEFT = Alignment(horizontal="left", vertical="center")
 
-
+# Excel raporu dışa aktarma
 def export_to_excel(
     summary_df: pd.DataFrame,
     outages: list[OutageRecord],
@@ -91,7 +91,7 @@ def export_to_excel(
 
     return file_path
 
-
+# SLA özet sekmesini biçimlendirme
 def _build_summary_sheet(ws, df: pd.DataFrame) -> None:
     """SLA Özet sekmesini biçimlendirir ve verileri ekler."""
     headers = [
@@ -135,7 +135,6 @@ def _build_summary_sheet(ws, df: pd.DataFrame) -> None:
             if is_alt_row:
                 cell.fill = _ALT_ROW_FILL
 
-            # SLA durumuna göre koşullu renklendirme (Passed: Yeşil, Failed: Kırmızı)
             if col_idx == 6:
                 if sla_status == "Passed":
                     cell.fill = _PASSED_FILL
@@ -155,7 +154,7 @@ def _build_summary_sheet(ws, df: pd.DataFrame) -> None:
     for col_idx, width in enumerate(col_widths, start=1):
         ws.column_dimensions[get_column_letter(col_idx)].width = width
 
-    # Tablo üst başlık başlığını ekle ve sabitle
+    # Tablo üst başlık başlıgı
     ws.insert_rows(1)
     ws.merge_cells("A1:F1")
     title_cell = ws["A1"]
@@ -167,7 +166,7 @@ def _build_summary_sheet(ws, df: pd.DataFrame) -> None:
 
     ws.freeze_panes = "A3"
 
-
+# Kesinti Detayları sekmesi
 def _build_details_sheet(ws, outages: list[OutageRecord]) -> None:
     """Kesinti Detayları sekmesini oluşturur ve zaman sıralı kesintileri listeler."""
     headers = ["Site Name", "Başlangıç", "Bitiş", "Süre (Dakika)"]

@@ -7,7 +7,7 @@ logger = get_logger(__name__)
 
 LegMap = dict[str, frozenset[tuple[str, str]]]
 
-
+# Bacak tespiti
 def detect_legs(df: pd.DataFrame) -> LegMap:
     """Log kayitlarindan her siteye ait benzersiz bacak (interface + role) kumesini tespit eder."""
     if df.empty:

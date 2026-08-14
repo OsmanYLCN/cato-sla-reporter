@@ -4,7 +4,7 @@ from utils.logger import get_logger
 
 logger = get_logger(__name__)
 
-
+# E-posta gönderimi için istemci
 class EmailSender:
     """E-posta rapor gönderimi için istemci sınıfı (ilerideki otomatik mod için taslak)."""
 

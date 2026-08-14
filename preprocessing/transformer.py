@@ -28,14 +28,14 @@ def transform(df: pd.DataFrame) -> pd.DataFrame:
 
     df = df.copy()
 
-    # String alanları temizle
+    # String normalizasyonu
     for col in [COL_SITE, COL_EVENT, COL_IFACE, COL_ROLE]:
         if col in df.columns:
             df[col] = df[col].str.strip()
 
     logger.debug("String normalizasyonu tamamlandi.")
 
-    # UTC zaman verisini parse et
+    # Zaman damgasını UTC formatına çevirme
     try:
         df[COL_TIME] = pd.to_datetime(df[COL_TIME], utc=True, errors="coerce")
     except Exception as exc:
@@ -52,11 +52,10 @@ def transform(df: pd.DataFrame) -> pd.DataFrame:
 
     logger.debug("UTC datetime donusumu tamamlandi.")
 
-    # Saat dilimini dönüştür (UTC -> Europe/Istanbul)
+    # UTC -> Europe/Istanbul
     df[COL_TIME] = df[COL_TIME].dt.tz_convert(_TZ)
     logger.debug("Saat dilimi donusumu tamamlandi: UTC → %s", TIMEZONE)
 
-    # Eksik veya geçersiz verileri temizle
     critical_cols = [COL_SITE, COL_EVENT, COL_IFACE, COL_ROLE]
     before_null_drop = len(df)
     df = df.dropna(subset=critical_cols)
@@ -66,6 +65,7 @@ def transform(df: pd.DataFrame) -> pd.DataFrame:
             "%d satir kritik sutunlardaki null deger nedeniyle atildi.", null_dropped
         )
 
+    # Bos string degerleri kontrol et ve at
     for col in critical_cols:
         empty_mask = df[col] == ""
         empty_count = empty_mask.sum()
@@ -75,7 +75,7 @@ def transform(df: pd.DataFrame) -> pd.DataFrame:
             )
             df = df[~empty_mask]
 
-    # Tekrarlayan verileri kaldır ve kronolojik sırala
+    # Duplicate satırları kaldır
     before_dedup = len(df)
     df = df.drop_duplicates()
     dedup_count = before_dedup - len(df)

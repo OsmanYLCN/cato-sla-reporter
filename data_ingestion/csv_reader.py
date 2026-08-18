@@ -23,7 +23,6 @@ class CsvLogReader(BaseLogReader):
         """CSV dosyasını doğrular, geçerli log kayıtlarını DataFrame olarak döndürür."""
         logger.info("CSV okunuyor: %s", self._path)
 
-        # Dosya varlık kontrolü
         if not self._path.exists():
             raise FileNotFoundError(
                 f"CSV dosyası bulunamadı: '{self._path}'. "
@@ -50,7 +49,7 @@ class CsvLogReader(BaseLogReader):
             logger.warning("CSV dosyası boş veya yalnızca başlık satırı içeriyor.")
             return df
 
-        # Sütun isimlerini ve zorunlu alanları doğrula
+        # Sütun isimlerini ve zorunlu alanları doğrulama
         df.columns = df.columns.str.strip()
 
         missing_cols = [c for c in REQUIRED_COLUMNS if c not in df.columns]
@@ -62,7 +61,7 @@ class CsvLogReader(BaseLogReader):
 
         df = df[REQUIRED_COLUMNS].copy()
 
-        # Geçersiz olay tiplerini ayıkla
+        # Geçersiz olay tiplerini ayıklama
         original_count = len(df)
         unexpected_mask = ~df[COL_EVENT].str.strip().isin(VALID_EVENT_TYPES)
         unexpected_count = unexpected_mask.sum()

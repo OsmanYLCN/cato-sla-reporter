@@ -35,7 +35,7 @@ def transform(df: pd.DataFrame) -> pd.DataFrame:
 
     logger.debug("String normalizasyonu tamamlandi.")
 
-    # Zaman damgasını UTC formatına çevirme
+    # Zaman damgasını UTC çevirme
     try:
         df[COL_TIME] = pd.to_datetime(df[COL_TIME], utc=True, errors="coerce")
     except Exception as exc:

@@ -1,3 +1,4 @@
+# GELİŞTİRİLME AŞAMASINDA: Cato Networks GraphQL API 
 import pandas as pd
 
 from data_ingestion.base_reader import BaseLogReader

@@ -63,7 +63,7 @@ def detect_outages(
 
     tolerance = timedelta(seconds=CORRELATION_WINDOW_SECONDS)
     outages: list[OutageRecord] = []
-    leg_map = dict(leg_map)  # çağıranın leg_map'ini mutate etmemek için yerel kopya
+    leg_map = dict(leg_map)  
 
     mask = (df[COL_TIME] >= period_start) & (df[COL_TIME] <= period_end)
     df_period = df[mask].copy()
@@ -85,7 +85,7 @@ def detect_outages(
 
     logger.debug("%d site icin durum makinesi baslatildi.", len(site_states))
 
-    # Olayları kronolojik sırayla işleyerek durum geçişlerini hesapla
+    # Olayları kronolojik sırayla işleyerek durum geçişlerini hesaplama
     for row in df_period.itertuples(index=False):
         site: str = getattr(row, COL_SITE)
         event_time: datetime = getattr(row, COL_TIME)
@@ -114,7 +114,7 @@ def detect_outages(
             period_end=period_end,
         )
 
-    # Rapor dönemi sonunda açık kalan kesintileri kapat
+    # Dönem sonunda açık kalan kesintileri kapatma
     for site, state in site_states.items():
         if state.state == "DOWN" and state.down_since is not None:
             rec = OutageRecord(

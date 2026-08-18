@@ -51,7 +51,7 @@ def calculate_sla(
         period_label, total_minutes, SLA_THRESHOLD_PCT,
     )
 
-    # Kesintileri site bazında grupla, çakışan aralıkları birleştir, süreyi hesapla
+    # Kesintileri grupla, çakışan aralıkları birleştir, süreyi hesapla
     site_outages: dict[str, list[OutageRecord]] = {}
     for record in outages:
         site_outages.setdefault(record.site, []).append(record)
@@ -65,7 +65,7 @@ def calculate_sla(
             "total_minutes": total_secs / 60.0,
         }
 
-    # Her site için Availability (%) ve Passed/Failed durumunu hesapla
+    # Her site için Availability hesaplama
     rows: list[dict] = []
 
     for site in sorted(all_sites):

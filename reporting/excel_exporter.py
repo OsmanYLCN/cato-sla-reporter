@@ -91,7 +91,7 @@ def export_to_excel(
 
     return file_path
 
-# SLA özet sekmesini biçimlendirme
+# SLA özet sekmesi
 def _build_summary_sheet(ws, df: pd.DataFrame) -> None:
     """SLA Özet sekmesini biçimlendirir ve verileri ekler."""
     headers = [
@@ -154,7 +154,7 @@ def _build_summary_sheet(ws, df: pd.DataFrame) -> None:
     for col_idx, width in enumerate(col_widths, start=1):
         ws.column_dimensions[get_column_letter(col_idx)].width = width
 
-    # Tablo üst başlık başlıgı
+    # Tablo üst başlık
     ws.insert_rows(1)
     ws.merge_cells("A1:F1")
     title_cell = ws["A1"]

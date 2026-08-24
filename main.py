@@ -86,7 +86,7 @@ def resolve_period_dates(
         )
         period_end = datetime(
             today.year, today.month, today.day,
-            23, 59, 59, tzinfo=TZ,
+            23, 59, 59, 999999, tzinfo=TZ,
         )
 
     elif mode == "auto":
@@ -101,7 +101,7 @@ def resolve_period_dates(
             )
             period_end = datetime(
                 last_month_end.year, last_month_end.month, last_day,
-                23, 59, 59, tzinfo=TZ,
+                23, 59, 59, 999999, tzinfo=TZ,
             )
 
         else:
@@ -116,7 +116,7 @@ def resolve_period_dates(
                 q_year = today.year
             _, last_day = monthrange(q_year, q_end_month)
             period_start = datetime(q_year, q_start_month, 1, 0, 0, 0, tzinfo=TZ)
-            period_end = datetime(q_year, q_end_month, last_day, 23, 59, 59, tzinfo=TZ)
+            period_end = datetime(q_year, q_end_month, last_day, 23, 59, 59, 999999, tzinfo=TZ)
 
     else:
         raise ValueError(f"Geçersiz mod: '{mode}'. 'manual' veya 'auto' olmalı.")

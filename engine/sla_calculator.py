@@ -1,4 +1,5 @@
 import pandas as pd
+from datetime import timedelta
 
 from config.settings import (
     PERIOD_LABELS,
@@ -59,10 +60,10 @@ def calculate_sla(
     site_stats: dict[str, dict] = {}
     for site, records in site_outages.items():
         merged = _merge_site_intervals(records)
-        total_secs = sum((e - s).total_seconds() for s, e in merged)
+        total_td = sum((e - s for s, e in merged), timedelta())
         site_stats[site] = {
             "count": len(records),
-            "total_minutes": total_secs / 60.0,
+            "total_minutes": total_td.total_seconds() / 60.0,
         }
 
     # Her site için Availability hesaplama

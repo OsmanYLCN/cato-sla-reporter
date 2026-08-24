@@ -65,7 +65,7 @@ def export_to_excel(
     out_dir.mkdir(parents=True, exist_ok=True)
 
     report_date = report_date or date.today()
-    filename = f"SLA_Report_{period_months}M_{report_date.strftime('%Y-%m-%d')}.xlsx"
+    filename = f"SLA_Report_{period_months}M_{report_date.strftime('%Y-%m-%d')}_{datetime.now().strftime('%H-%M-%S')}.xlsx"
     file_path = out_dir / filename
 
     logger.info("Excel raporu oluşturuluyor: %s", file_path)

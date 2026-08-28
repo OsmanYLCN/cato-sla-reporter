@@ -100,10 +100,11 @@ def detect_outages(
             state.leg_status[leg_key] = event_type
             site_states[site] = state
             leg_map[site] = frozenset({leg_key})
-            continue
-
-        state = site_states[site]
-        state.leg_status[leg_key] = event_type
+        else:
+            state = site_states[site]
+            state.leg_status[leg_key] = event_type
+            if leg_key not in leg_map.get(site, frozenset()):
+                leg_map[site] = leg_map[site] | {leg_key}
 
         _process_event(
             site=site,

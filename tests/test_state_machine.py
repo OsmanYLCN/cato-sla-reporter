@@ -164,3 +164,39 @@ class TestNoLogs:
         df, leg_map = _prepare(events)
         outages = detect_outages(df, leg_map, PERIOD_START, PERIOD_END)
         assert len(outages) == 0
+
+
+class TestDynamicLegs:
+    def test_untracked_site_first_event_disconnected_triggers_outage(self):
+        t_down = datetime(2026, 7, 10, 10, 0, 0, tzinfo=_TZ)
+        t_up   = datetime(2026, 7, 10, 10, 45, 0, tzinfo=_TZ)
+
+        events = [
+            _make_event("SiteNew", t_down, "Disconnected", "WAN1", "primary"),
+            _make_event("SiteNew", t_up,   "Connected",    "WAN1", "primary"),
+        ]
+        df = pd.DataFrame(events)
+        df[COL_TIME] = pd.to_datetime(df[COL_TIME])
+        # leg_map bos veriliyor (untracked site)
+        outages = detect_outages(df, {}, PERIOD_START, PERIOD_END)
+        assert len(outages) == 1
+        assert outages[0].site == "SiteNew"
+
+    def test_untracked_second_leg_in_candidate(self):
+        t1 = datetime(2026, 7, 10, 10, 0, 0, tzinfo=_TZ)
+        t2 = datetime(2026, 7, 10, 10, 0, 10, tzinfo=_TZ)
+        t3 = datetime(2026, 7, 10, 11, 0, 0, tzinfo=_TZ)
+
+        events = [
+            _make_event("SiteDynamic", t1, "Disconnected", "WAN1", "primary"),
+            _make_event("SiteDynamic", t2, "Disconnected", "WAN2", "secondary"),
+            _make_event("SiteDynamic", t3, "Connected",    "WAN1", "primary"),
+        ]
+        df = pd.DataFrame(events)
+        df[COL_TIME] = pd.to_datetime(df[COL_TIME])
+        # leg_map sadece WAN1 biliyor, WAN2 dinamik geliyor
+        initial_leg_map = {"SiteDynamic": frozenset({("WAN1", "primary")})}
+        outages = detect_outages(df, initial_leg_map, PERIOD_START, PERIOD_END)
+        assert len(outages) == 1
+        assert outages[0].site == "SiteDynamic"
+

@@ -58,6 +58,12 @@ class TestNullFiltering:
         result = transform(df)
         assert len(result) == 1
 
+    def test_whitespace_string_site_dropped(self):
+        df = _make_df(**{COL_SITE: ["   ", "Site-A"]})
+        result = transform(df)
+        assert len(result) == 1
+        assert result[COL_SITE].iloc[0] == "Site-A"
+
     def test_invalid_timestamp_dropped(self):
         df = _make_df(**{COL_TIME: ["INVALID_DATE", "2026-07-01 10:00:00"]})
         result = transform(df)

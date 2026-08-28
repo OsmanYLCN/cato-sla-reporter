@@ -65,9 +65,9 @@ def transform(df: pd.DataFrame) -> pd.DataFrame:
             "%d satir kritik sutunlardaki null deger nedeniyle atildi.", null_dropped
         )
 
-    # Bos string degerleri kontrol et ve at
+    # Bos veya yalnizca bosluk iceren string degerleri kontrol et ve at
     for col in critical_cols:
-        empty_mask = df[col] == ""
+        empty_mask = df[col].astype(str).str.strip() == ""
         empty_count = empty_mask.sum()
         if empty_count > 0:
             logger.warning(

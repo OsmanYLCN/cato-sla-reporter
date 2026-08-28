@@ -77,6 +77,20 @@ class TestDeduplication:
         result = transform(df)
         assert len(result) == 1
 
+    def test_consecutive_duplicate_events_removed(self):
+        rows = [
+            {COL_SITE: "Site-A", COL_TIME: "2026-07-01 10:00:00", COL_EVENT: "Disconnected", COL_IFACE: "WAN1", COL_ROLE: "primary"},
+            {COL_SITE: "Site-A", COL_TIME: "2026-07-01 10:05:00", COL_EVENT: "Disconnected", COL_IFACE: "WAN1", COL_ROLE: "primary"}, # consecutive dup
+            {COL_SITE: "Site-A", COL_TIME: "2026-07-01 11:00:00", COL_EVENT: "Connected",    COL_IFACE: "WAN1", COL_ROLE: "primary"},
+            {COL_SITE: "Site-A", COL_TIME: "2026-07-01 11:05:00", COL_EVENT: "Connected",    COL_IFACE: "WAN1", COL_ROLE: "primary"}, # consecutive dup
+            {COL_SITE: "Site-A", COL_TIME: "2026-07-01 12:00:00", COL_EVENT: "Disconnected", COL_IFACE: "WAN1", COL_ROLE: "primary"},
+        ]
+        df = pd.DataFrame(rows)
+        result = transform(df)
+        assert len(result) == 3
+        events = result[COL_EVENT].tolist()
+        assert events == ["Disconnected", "Connected", "Disconnected"]
+
 
 class TestSorting:
     def test_sorted_ascending(self):

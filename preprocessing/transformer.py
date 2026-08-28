@@ -84,6 +84,15 @@ def transform(df: pd.DataFrame) -> pd.DataFrame:
 
     df = df.sort_values(by=COL_TIME, ascending=True).reset_index(drop=True)
 
+    # Ardışık tekrar eden durumları kaldır (yalnızca durum değişikliklerini sakla)
+    if not df.empty:
+        leg_cols = [COL_SITE, COL_IFACE, COL_ROLE]
+        is_consecutive_dup = df.groupby(leg_cols, sort=False)[COL_EVENT].shift(1) == df[COL_EVENT]
+        consecutive_dup_count = is_consecutive_dup.sum()
+        if consecutive_dup_count > 0:
+            logger.debug("%d ardisik duplicate durum satiri kaldirildi.", consecutive_dup_count)
+            df = df[~is_consecutive_dup].reset_index(drop=True)
+
     logger.info(
         "Donusum tamamlandi. Cikti satir sayisi: %d (atilan: %d).",
         len(df),

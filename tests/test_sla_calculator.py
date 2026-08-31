@@ -87,3 +87,16 @@ class TestNoLogSite:
         row = result[result["Site Name"] == "SiteB_NoLog"].iloc[0]
         assert row[COL_OUT_AVAIL] == pytest.approx(100.0)
         assert row[COL_OUT_SLA] == "Passed"
+
+
+class TestExcelSanitization:
+    def test_formula_injection_characters_escaped(self):
+        from reporting.excel_exporter import _sanitize_cell_value
+        assert _sanitize_cell_value("=SUM(A1:A10)") == "'=SUM(A1:A10)"
+        assert _sanitize_cell_value("+Site-HQ") == "'+Site-HQ"
+        assert _sanitize_cell_value("-Branch-1") == "'-Branch-1"
+        assert _sanitize_cell_value("@cmd") == "'@cmd"
+        assert _sanitize_cell_value("NormalSite") == "NormalSite"
+        assert _sanitize_cell_value(100) == 100
+        assert _sanitize_cell_value(99.95) == 99.95
+

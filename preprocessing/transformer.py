@@ -37,7 +37,9 @@ def transform(df: pd.DataFrame) -> pd.DataFrame:
 
     # Zaman damgasını UTC çevirme
     try:
-        df[COL_TIME] = pd.to_datetime(df[COL_TIME], utc=True, errors="coerce")
+        df[COL_TIME] = pd.to_datetime(
+            df[COL_TIME], utc=True, errors="coerce", format="mixed"
+        )
     except Exception as exc:
         raise ValueError(
             f"`{COL_TIME}` sutunu datetime formatina donusturulemedi: {exc}"

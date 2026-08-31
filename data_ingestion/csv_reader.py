@@ -33,11 +33,24 @@ class CsvLogReader(BaseLogReader):
             raise ValueError(f"Belirtilen yol bir dosya değil: '{self._path}'")
 
         try:
-            df = pd.read_csv(
-                self._path,
-                low_memory=False,
-                dtype=str,
-            )
+            try:
+                df = pd.read_csv(
+                    self._path,
+                    low_memory=False,
+                    dtype=str,
+                    encoding="utf-8",
+                )
+            except UnicodeDecodeError:
+                logger.warning(
+                    "UTF-8 kodlaması başarısız oldu, 'latin-1' ile tekrar deneniyor: %s",
+                    self._path,
+                )
+                df = pd.read_csv(
+                    self._path,
+                    low_memory=False,
+                    dtype=str,
+                    encoding="latin-1",
+                )
         except Exception as exc:
             raise RuntimeError(
                 f"CSV okunurken hata oluştu: {exc}"

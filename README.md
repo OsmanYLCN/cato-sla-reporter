@@ -55,7 +55,7 @@ python main.py --input /path/to/events.csv --period 1 --mode auto
 
 ## Outputs
 
-The tool generates `output/SLA_Report_<Period>M_<Date>.xlsx` containing:
+The tool generates `output/SLA_Report_<Period>M_<Date>_<Time>.xlsx` (e.g. `SLA_Report_1M_2026-08-31_14-30-00.xlsx`) containing:
 1. **SLA Summary**: Site metrics (Downtime, Availability %, and SLA Status highlighted in green/red).
 2. **Outage Details**: Granular audit log showing start/end timestamps and duration of each outage.
 

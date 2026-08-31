@@ -91,6 +91,15 @@ def export_to_excel(
 
     return file_path
 
+def _sanitize_cell_value(value: any) -> any:
+    """Excel Formula Injection (CWE-1236) koruması sağlar.
+    Metin '=', '+', '-', '@' ile başlıyorsa Excel'in formül olarak çalıştırmasını önler.
+    """
+    if isinstance(value, str) and value.startswith(("=", "+", "-", "@")):
+        return f"'{value}"
+    return value
+
+
 # SLA özet sekmesi
 def _build_summary_sheet(ws, df: pd.DataFrame) -> None:
     """SLA Özet sekmesini biçimlendirir ve verileri ekler."""
@@ -118,12 +127,12 @@ def _build_summary_sheet(ws, df: pd.DataFrame) -> None:
         is_alt_row = (row_idx % 2 == 0)
 
         row_data = [
-            row[COL_OUT_SITE],
-            row[COL_OUT_PERIOD],
+            _sanitize_cell_value(row[COL_OUT_SITE]),
+            _sanitize_cell_value(row[COL_OUT_PERIOD]),
             int(row[COL_OUT_COUNT]),
             row[COL_OUT_DURATION],
             row[COL_OUT_AVAIL],
-            sla_status,
+            _sanitize_cell_value(sla_status),
         ]
 
         ws.append(row_data)
@@ -191,7 +200,7 @@ def _build_details_sheet(ws, outages: list[OutageRecord]) -> None:
     for row_idx, rec in enumerate(sorted_outages, start=2):
         is_alt_row = (row_idx % 2 == 0)
         row_data = [
-            rec.site,
+            _sanitize_cell_value(rec.site),
             rec.start.strftime(date_fmt),
             rec.end.strftime(date_fmt),
             rec.duration_minutes,

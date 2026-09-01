@@ -26,6 +26,7 @@ def transform(df: pd.DataFrame) -> pd.DataFrame:
         logger.warning("Bos DataFrame alindi; donusum atlaniyor.")
         return df
 
+    original_count = len(df)
     df = df.copy()
 
     # String normalizasyonu
@@ -95,10 +96,11 @@ def transform(df: pd.DataFrame) -> pd.DataFrame:
             logger.debug("%d ardisik duplicate durum satiri kaldirildi.", consecutive_dup_count)
             df = df[~is_consecutive_dup].reset_index(drop=True)
 
+    dropped_count = original_count - len(df)
     logger.info(
         "Donusum tamamlandi. Cikti satir sayisi: %d (atilan: %d).",
         len(df),
-        invalid_time_count + (before_null_drop - len(df)),
+        dropped_count,
     )
 
     return df

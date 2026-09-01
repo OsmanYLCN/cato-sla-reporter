@@ -1,8 +1,6 @@
 import argparse
 import sys
 from datetime import date, datetime, timedelta
-from calendar import monthrange
-from zoneinfo import ZoneInfo
 
 from config.settings import COL_TIME, PERIOD_LABELS, TZ
 from data_ingestion.csv_reader import CsvLogReader
@@ -17,27 +15,28 @@ logger = get_logger(__name__)
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
-    """Komut satırı parametrelerini ayrıştırır."""
+    """Parses command-line arguments."""
     parser = argparse.ArgumentParser(
         prog="cato-sla-reporter",
         description=(
-            "Cato Networks cihaz loglarından lokasyon bazlı "
-            "SLA / Availability raporu oluşturur."
+            "Generate location-based SLA / Availability reports "
+            "from Cato Networks device logs."
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=(
-            "Örnekler:\n"
+            "Examples:\n"
             "  python main.py --input events.csv --period 1\n"
-            "  python main.py --input events.csv --period 3 --output ./raporlar\n"
+            "  python main.py --input events.csv --period 3 --output ./reports\n"
             "  python main.py --input events.csv --period 1 --mode auto\n"
+            "  python main.py --input events.csv --period 3 --mode auto\n"
         ),
     )
 
     parser.add_argument(
         "--input",
-        metavar="CSV_YOLU",
+        metavar="CSV_PATH",
         required=True,
-        help="Cato Networks log CSV dosyasının yolu.",
+        help="Path to Cato Networks log CSV file.",
     )
     parser.add_argument(
         "--period",
@@ -45,24 +44,24 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         choices=[1, 3],
         required=True,
         metavar="{1,3}",
-        help="Rapor dönemi: 1 (Son 30 gün / Önceki Ay) veya 3 (Son 90 gün / Önceki Çeyrek).",
+        help="Report period in months: 1 (Last 30 Days / Last 1 Month) or 3 (Last 90 Days / Last 3 Months).",
     )
     parser.add_argument(
         "--mode",
         choices=["manual", "auto"],
         default="manual",
         help=(
-            "Çalışma modu. "
-            "'manual': Geriye dönük son 30/90 gün. "
-            "'auto': Bir önceki tam takvim ayı/çeyreği (CronJob için). "
-            "(Varsayılan: manual)"
+            "Execution mode. "
+            "'manual': Rolling last 30/90 days from today. "
+            "'auto': Last 1 or 3 completed calendar months (for scheduled jobs). "
+            "(Default: manual)"
         ),
     )
     parser.add_argument(
         "--output",
-        metavar="KLASÖR",
+        metavar="DIR",
         default=None,
-        help="Çıktı Excel dosyasının yazılacağı klasör. (Varsayılan: ./output)",
+        help="Directory to save the Excel report. (Default: ./output)",
     )
 
     return parser.parse_args(argv)
@@ -90,33 +89,27 @@ def resolve_period_dates(
         )
 
     elif mode == "auto":
-        if period_months == 1:
-            first_of_this_month = today.replace(day=1)
-            last_month_end = first_of_this_month - timedelta(days=1)
-            last_month_start = last_month_end.replace(day=1)
-            _, last_day = monthrange(last_month_end.year, last_month_end.month)
-            period_start = datetime(
-                last_month_start.year, last_month_start.month, 1,
-                0, 0, 0, tzinfo=TZ,
-            )
-            period_end = datetime(
-                last_month_end.year, last_month_end.month, last_day,
-                23, 59, 59, 999999, tzinfo=TZ,
-            )
+        # Tamamlanmış en son takvim ayının bitişi (bu ayın 1'inden 1 gün öncesi)
+        first_of_this_month = today.replace(day=1)
+        last_month_end = first_of_this_month - timedelta(days=1)
 
-        else:
-            current_quarter = (today.month - 1) // 3
-            if current_quarter == 0:
-                q_start_month = 10
-                q_end_month = 12
-                q_year = today.year - 1
-            else:
-                q_start_month = (current_quarter - 1) * 3 + 1
-                q_end_month = q_start_month + 2
-                q_year = today.year
-            _, last_day = monthrange(q_year, q_end_month)
-            period_start = datetime(q_year, q_start_month, 1, 0, 0, 0, tzinfo=TZ)
-            period_end = datetime(q_year, q_end_month, last_day, 23, 59, 59, 999999, tzinfo=TZ)
+        # Geriye dönük period_months kadar tamamlanmış takvim ayı
+        start_month_idx = (
+            last_month_end.year * 12
+            + (last_month_end.month - 1)
+            - (period_months - 1)
+        )
+        start_year = start_month_idx // 12
+        start_month = (start_month_idx % 12) + 1
+
+        period_start = datetime(
+            start_year, start_month, 1,
+            0, 0, 0, tzinfo=TZ,
+        )
+        period_end = datetime(
+            last_month_end.year, last_month_end.month, last_month_end.day,
+            23, 59, 59, 999999, tzinfo=TZ,
+        )
 
     else:
         raise ValueError(f"Geçersiz mod: '{mode}'. 'manual' veya 'auto' olmalı.")

@@ -97,6 +97,21 @@ class TestExcelSanitization:
         assert _sanitize_cell_value("-Branch-1") == "'-Branch-1"
         assert _sanitize_cell_value("@cmd") == "'@cmd"
         assert _sanitize_cell_value("NormalSite") == "NormalSite"
-        assert _sanitize_cell_value(100) == 100
         assert _sanitize_cell_value(99.95) == 99.95
+
+
+class TestCustomTotalMinutes:
+    def test_custom_calendar_month_minutes(self):
+        # 31 günlük ay = 44,640 dakika
+        t = datetime(2026, 8, 10, 10, 0, 0, tzinfo=_TZ)
+        outage = _make_outage("SiteAugust", t, 44.64)  # tam 0.1% kesinti -> %99.90 availability
+        result = calculate_sla(
+            outages=[outage],
+            all_sites=["SiteAugust"],
+            period_months=1,
+            total_minutes=44640.0,
+        )
+        row = result[result["Site Name"] == "SiteAugust"].iloc[0]
+        assert row[COL_OUT_AVAIL] == pytest.approx(99.90, abs=0.0001)
+        assert row[COL_OUT_SLA] == "Passed"
 

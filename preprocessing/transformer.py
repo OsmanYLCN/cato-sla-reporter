@@ -9,13 +9,13 @@ from config.settings import (
     COL_SITE,
     COL_TIME,
     TIMEZONE,
+    TZ,
 )
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
 
 _UTC = ZoneInfo("UTC")
-_TZ = ZoneInfo(TIMEZONE)
 
 
 def transform(df: pd.DataFrame) -> pd.DataFrame:
@@ -56,7 +56,7 @@ def transform(df: pd.DataFrame) -> pd.DataFrame:
     logger.debug("UTC datetime donusumu tamamlandi.")
 
     # UTC -> Europe/Istanbul
-    df[COL_TIME] = df[COL_TIME].dt.tz_convert(_TZ)
+    df[COL_TIME] = df[COL_TIME].dt.tz_convert(TZ)
     logger.debug("Saat dilimi donusumu tamamlandi: UTC → %s", TIMEZONE)
 
     critical_cols = [COL_SITE, COL_EVENT, COL_IFACE, COL_ROLE]

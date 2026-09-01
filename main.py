@@ -2,7 +2,13 @@ import argparse
 import sys
 from datetime import date, datetime, timedelta
 
-from config.settings import COL_TIME, PERIOD_LABELS, TZ
+from config.settings import (
+    COL_TIME,
+    PERIOD_LABELS,
+    SLA_STATUS_FAILED,
+    SLA_STATUS_PASSED,
+    TZ,
+)
 from data_ingestion.csv_reader import CsvLogReader
 from engine.leg_detector import detect_legs
 from engine.sla_calculator import calculate_sla
@@ -115,7 +121,7 @@ def resolve_period_dates(
         raise ValueError(f"Geçersiz mod: '{mode}'. 'manual' veya 'auto' olmalı.")
 
     logger.info(
-        "Rapor dönemi belirlendi [%s modu]: %s → %s",
+        "Report period resolved [%s mode]: %s → %s",
         mode,
         period_start.strftime("%Y-%m-%d %H:%M:%S %Z"),
         period_end.strftime("%Y-%m-%d %H:%M:%S %Z"),
@@ -125,11 +131,11 @@ def resolve_period_dates(
 
 
 def run(args: argparse.Namespace) -> None:
-    """Tüm analiz ve raporlama pipeline'ını sırasıyla çalıştırır."""
+    """Executes the entire SLA analysis and reporting pipeline."""
     logger.info("=" * 60)
-    logger.info("Cato SLA Reporter başlatıldı.")
+    logger.info("Cato SLA Reporter initialized.")
     logger.info(
-        "Parametreler: input='%s' | period=%d ay | mode=%s",
+        "Parameters: input='%s' | period=%d month(s) | mode=%s",
         args.input, args.period, args.mode,
     )
     logger.info("=" * 60)
@@ -145,7 +151,7 @@ def run(args: argparse.Namespace) -> None:
     raw_df = reader.read()
 
     if raw_df.empty:
-        logger.error("Veri okunamadı veya CSV boş. İşlem durduruluyor.")
+        logger.error("Could not read data or CSV is empty. Aborting.")
         sys.exit(1)
 
     # 3. Veriyi dönüştür ve temizle
@@ -153,8 +159,8 @@ def run(args: argparse.Namespace) -> None:
 
     if clean_df.empty:
         logger.error(
-            "Temizleme sonrası veri kalmadı. "
-            "CSV formatını ve sütun adlarını kontrol edin."
+            "No data remaining after transformation. "
+            "Please check CSV format and columns."
         )
         sys.exit(1)
 
@@ -166,7 +172,7 @@ def run(args: argparse.Namespace) -> None:
     leg_map = detect_legs(clean_df[period_mask])
 
     if not leg_map:
-        logger.error("Hiç site tespit edilemedi. İşlem durduruluyor.")
+        logger.error("No sites detected in the period. Aborting.")
         sys.exit(1)
 
     all_sites = list(leg_map.keys())
@@ -179,11 +185,13 @@ def run(args: argparse.Namespace) -> None:
         period_end=period_end,
     )
 
-    # 6. SLA ve Availability değerlerini hesapla
+    # 6. SLA ve Availability değerlerini hesapla (gerçek takvim süresiyle)
+    exact_period_minutes = (period_end - period_start).total_seconds() / 60.0
     summary_df = calculate_sla(
         outages=outages,
         all_sites=all_sites,
         period_months=args.period,
+        total_minutes=exact_period_minutes,
     )
 
     # 7. Excel raporunu oluştur
@@ -202,28 +210,29 @@ def run(args: argparse.Namespace) -> None:
     logger.info("Total sites   : %d", len(summary_df))
     logger.info(
         "Sites passed SLA : %d",
-        (summary_df["SLA Status"] == "Passed").sum(),
+        (summary_df["SLA Status"] == SLA_STATUS_PASSED).sum(),
     )
     logger.info(
         "Sites failed SLA : %d",
-        (summary_df["SLA Status"] == "Failed").sum(),
+        (summary_df["SLA Status"] == SLA_STATUS_FAILED).sum(),
     )
     logger.info("Report file   : %s", output_path.resolve())
     logger.info("=" * 60)
 
 
 def main() -> None:
-    """Uygulama giriş noktası."""
+    """Application entry point."""
     try:
         args = parse_args()
         run(args)
     except KeyboardInterrupt:
-        logger.warning("İşlem kullanıcı tarafından iptal edildi.")
+        logger.warning("Process interrupted by user.")
         sys.exit(0)
     except Exception as exc:
-        logger.error("Beklenmedik hata: %s", exc, exc_info=True)
+        logger.error("Unexpected error: %s", exc, exc_info=True)
         sys.exit(1)
 
 
 if __name__ == "__main__":
     main()
+

@@ -27,13 +27,12 @@ from config.settings import (
     COL_ROLE,
     COL_SITE,
     COL_TIME,
-    TIMEZONE,
+    TZ,
 )
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
 
-_TZ = ZoneInfo(TIMEZONE)
 _UTC = ZoneInfo("UTC")
 
 # ---------------------------------------------------------------------------
@@ -384,14 +383,14 @@ class CatoApiClient:
                 if ms > 1e12:
                     ms = ms // 1000
                 dt_utc = datetime.fromtimestamp(ms, tz=_UTC)
-                return dt_utc.astimezone(_TZ)
+                return dt_utc.astimezone(TZ)
 
             if isinstance(raw, str):
                 raw_clean = raw.replace("Z", "+00:00")
                 dt = datetime.fromisoformat(raw_clean)
                 if dt.tzinfo is None:
                     dt = dt.replace(tzinfo=_UTC)
-                return dt.astimezone(_TZ)
+                return dt.astimezone(TZ)
 
         except (ValueError, OSError, OverflowError):
             pass

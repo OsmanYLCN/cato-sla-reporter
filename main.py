@@ -204,18 +204,18 @@ def run(args: argparse.Namespace) -> None:
 
     # Özet konsol çıktısı
     logger.info("=" * 60)
-    logger.info("İşlem tamamlandı.")
-    logger.info("Rapor dönemi : %s", PERIOD_LABELS[args.period])
-    logger.info("Toplam site  : %d", len(summary_df))
+    logger.info("Process completed.")
+    logger.info("Report period : %s", PERIOD_LABELS[args.period])
+    logger.info("Total sites   : %d", len(summary_df))
     logger.info(
-        "SLA Eşiğini Geçen Site (Passed) : %d",
-        (summary_df["SLA Durumu"] == "Passed").sum(),
+        "Sites passed SLA : %d",
+        (summary_df["SLA Status"] == "Passed").sum(),
     )
     logger.info(
-        "SLA Eşiğini Geçemeyen (Failed) : %d",
-        (summary_df["SLA Durumu"] == "Failed").sum(),
+        "Sites failed SLA : %d",
+        (summary_df["SLA Status"] == "Failed").sum(),
     )
-    logger.info("Rapor dosyası: %s", output_path.resolve())
+    logger.info("Report file   : %s", output_path.resolve())
     logger.info("=" * 60)
 
 

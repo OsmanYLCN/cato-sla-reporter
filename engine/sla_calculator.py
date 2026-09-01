@@ -11,13 +11,13 @@ from utils.logger import get_logger
 
 logger = get_logger(__name__)
 
-# Çıktı DataFrame sütun isimleri
-COL_OUT_SITE = "Site Name"
-COL_OUT_PERIOD = "Rapor Dönemi"
-COL_OUT_COUNT = "Gerçek Kesinti Sayısı"
-COL_OUT_DURATION = "Toplam Kesinti Süresi (Dakika)"
-COL_OUT_AVAIL = "Availability (%)"
-COL_OUT_SLA = "SLA Durumu"
+# Output DataFrame column names (English)
+COL_OUT_SITE     = "Site Name"
+COL_OUT_PERIOD   = "Report Period"
+COL_OUT_COUNT    = "Outage Count"
+COL_OUT_DURATION = "Total Downtime (Minutes)"
+COL_OUT_AVAIL    = "Availability (%)"
+COL_OUT_SLA      = "SLA Status"
 
 # Site aralıklarını birleştirme
 def _merge_site_intervals(records: list[OutageRecord]) -> list[tuple]:

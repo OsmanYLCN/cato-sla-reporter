@@ -23,8 +23,8 @@ PERIOD_MINUTES: dict[int, int] = {
 }
 
 PERIOD_LABELS: dict[int, str] = {
-    1: "Son 1 Ay",
-    3: "Son 3 Ay",
+    1: "Last 1 Month",
+    3: "Last 3 Months",
 }
 
 # Anlık bağlantı dalgalanmalarını tolere etme süresi (saniye)
@@ -52,8 +52,9 @@ OUTPUT_DIR: str = "output"
 LOG_DIR: str = "logs"
 
 # Excel çıktı biçimlendirme ayarları
-EXCEL_SHEET_SUMMARY: str = "SLA Özet"
-EXCEL_SHEET_DETAILS: str = "Kesinti Detayları"
+EXCEL_SHEET_SUMMARY: str = "SLA Summary"
+EXCEL_SHEET_DETAILS: str = "Outage Details"
+EXCEL_SHEET_OVERALL: str = "Overall Summary"
 
 COLOR_PASSED_BG: str = "FF92D050"
 COLOR_PASSED_FONT: str = "FF375623"

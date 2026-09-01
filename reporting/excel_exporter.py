@@ -24,6 +24,9 @@ from config.settings import (
     EXCEL_SHEET_OVERALL,
     EXCEL_SHEET_SUMMARY,
     OUTPUT_DIR,
+    SLA_STATUS_FAILED,
+    SLA_STATUS_PASSED,
+    SLA_THRESHOLD_PCT,
 )
 from engine.sla_calculator import (
     COL_OUT_AVAIL,
@@ -98,7 +101,7 @@ def export_to_excel(
     return file_path
 
 
-def _sanitize_cell_value(value: any) -> any:
+def _sanitize_cell_value(value: object) -> object:
     """Excel Formula Injection (CWE-1236) koruması sağlar.
     Metin '=', '+', '-', '@' ile başlıyorsa Excel'in formül olarak çalıştırmasını önler.
     """
@@ -109,7 +112,7 @@ def _sanitize_cell_value(value: any) -> any:
 
 # SLA özet sekmesi
 def _build_summary_sheet(ws, df: pd.DataFrame) -> None:
-    """SLA Özet sekmesini biçimlendirir ve verileri ekler."""
+    """Formats the SLA Summary sheet and inserts data."""
     headers = [
         COL_OUT_SITE,
         COL_OUT_PERIOD,
@@ -152,7 +155,7 @@ def _build_summary_sheet(ws, df: pd.DataFrame) -> None:
                 cell.fill = _ALT_ROW_FILL
 
             if col_idx == 6:
-                if sla_status == "Passed":
+                if sla_status == SLA_STATUS_PASSED:
                     cell.fill = _PASSED_FILL
                     cell.font = _PASSED_FONT_STYLE
                 else:
@@ -184,7 +187,7 @@ def _build_summary_sheet(ws, df: pd.DataFrame) -> None:
 
 # Kesinti Detayları sekmesi
 def _build_details_sheet(ws, outages: list[OutageRecord]) -> None:
-    """Kesinti Detayları sekmesini oluşturur ve zaman sıralı kesintileri listeler."""
+    """Creates the Outage Details sheet and lists chronological outages."""
     headers = ["Site Name", "Start Time", "End Time", "Duration (Minutes)"]
     date_fmt = "%d.%m.%Y %H:%M:%S"
 
@@ -199,7 +202,7 @@ def _build_details_sheet(ws, outages: list[OutageRecord]) -> None:
 
     if not outages:
         ws.append(["No outages detected during the report period.", "", "", ""])
-        logger.info("Kesinti detayları sekmesi: kesinti yok.")
+        logger.info("Outage details sheet: no outages recorded.")
         return
 
     sorted_outages = sorted(outages, key=lambda o: (o.site, o.start))
@@ -230,7 +233,7 @@ def _build_details_sheet(ws, outages: list[OutageRecord]) -> None:
 
     ws.freeze_panes = "A2"
 
-    logger.info("Kesinti Detaylari sekmesi yazildi: %d kayit.", len(sorted_outages))
+    logger.info("Outage details sheet written: %d records.", len(sorted_outages))
 
 
 # Overall Summary sekmesi
@@ -239,13 +242,7 @@ def _build_overall_sheet(
     df: pd.DataFrame,
     period_months: int,
 ) -> None:
-    """Overall Summary sekmesini olusturur.
-
-    Tum sitelerin rapor donemindeki metriklerinin ortalamasini tek bir
-    ozet tablo seklinde gosterir. Tum etiketler ve degerler Ingilizce'dir.
-    """
-    from config.settings import SLA_THRESHOLD_PCT
-
+    """Creates the Overall Summary sheet aggregating all sites."""
     # --- Baslik ---
     ws.merge_cells("A1:B1")
     title_cell = ws["A1"]
@@ -290,8 +287,8 @@ def _build_overall_sheet(
         avg_downtime  = df[COL_OUT_DURATION].mean()
         avg_outages   = df[COL_OUT_COUNT].mean()
         total_outages = int(df[COL_OUT_COUNT].sum())
-        passed_count  = int((df[COL_OUT_SLA] == "Passed").sum())
-        failed_count  = int((df[COL_OUT_SLA] == "Failed").sum())
+        passed_count  = int((df[COL_OUT_SLA] == SLA_STATUS_PASSED).sum())
+        failed_count  = int((df[COL_OUT_SLA] == SLA_STATUS_FAILED).sum())
         pass_rate     = (passed_count / len(df)) * 100 if len(df) > 0 else 0.0
     else:
         avg_avail = avg_downtime = avg_outages = pass_rate = 0.0
@@ -322,4 +319,5 @@ def _build_overall_sheet(
     ws.column_dimensions["A"].width = 36
     ws.column_dimensions["B"].width = 22
 
-    logger.info("Overall Summary sekmesi yazildi.")
+    logger.info("Overall Summary sheet written.")
+

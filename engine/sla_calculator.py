@@ -4,6 +4,8 @@ from datetime import timedelta
 from config.settings import (
     PERIOD_LABELS,
     PERIOD_MINUTES,
+    SLA_STATUS_FAILED,
+    SLA_STATUS_PASSED,
     SLA_THRESHOLD_PCT,
 )
 from engine.state_machine import OutageRecord
@@ -19,9 +21,9 @@ COL_OUT_DURATION = "Total Downtime (Minutes)"
 COL_OUT_AVAIL    = "Availability (%)"
 COL_OUT_SLA      = "SLA Status"
 
-# Site aralıklarını birleştirme
+
 def _merge_site_intervals(records: list[OutageRecord]) -> list[tuple]:
-    """Ayni site icin cakisan kesinti araliklerini birlestirir."""
+    """Merges overlapping outage intervals for the same site."""
     intervals = sorted((r.start, r.end) for r in records)
     merged: list[list] = []
     for start, end in intervals:
@@ -31,25 +33,26 @@ def _merge_site_intervals(records: list[OutageRecord]) -> list[tuple]:
             merged.append([start, end])
     return [(s, e) for s, e in merged]
 
-# SLA hesaplama
+
 def calculate_sla(
     outages: list[OutageRecord],
     all_sites: list[str],
     period_months: int,
+    total_minutes: float | None = None,
 ) -> pd.DataFrame:
-    """Kesinti kayitlarindan site bazli erisilebilirlik (%) ve SLA durumunu hesaplar."""
+    """Calculates site-level availability (%) and SLA status from outage records."""
     if period_months not in PERIOD_MINUTES:
         raise ValueError(
             f"Geçersiz rapor dönemi: {period_months}. "
             f"Geçerli değerler: {list(PERIOD_MINUTES.keys())}"
         )
 
-    total_minutes = PERIOD_MINUTES[period_months]
+    calc_total_minutes = total_minutes if total_minutes is not None else float(PERIOD_MINUTES[period_months])
     period_label = PERIOD_LABELS[period_months]
 
     logger.info(
-        "SLA hesabi basliyor. Dönem: %s | Toplam dk: %d | Eşik: %%%s",
-        period_label, total_minutes, SLA_THRESHOLD_PCT,
+        "Starting SLA calculation. Period: %s | Total mins: %.2f | Threshold: %.2f%%",
+        period_label, calc_total_minutes, SLA_THRESHOLD_PCT,
     )
 
     # Kesintileri grupla, çakışan aralıkları birleştir, süreyi hesapla
@@ -71,10 +74,14 @@ def calculate_sla(
 
     for site in sorted(all_sites):
         stats = site_stats.get(site, {"count": 0, "total_minutes": 0.0})
-        downtime_min: float = min(stats["total_minutes"], total_minutes)
+        downtime_min: float = min(stats["total_minutes"], calc_total_minutes)
 
-        availability = ((total_minutes - downtime_min) / total_minutes) * 100
-        sla_status = "Passed" if availability >= SLA_THRESHOLD_PCT else "Failed"
+        availability = (
+            ((calc_total_minutes - downtime_min) / calc_total_minutes) * 100
+            if calc_total_minutes > 0
+            else 100.0
+        )
+        sla_status = SLA_STATUS_PASSED if availability >= SLA_THRESHOLD_PCT else SLA_STATUS_FAILED
 
         rows.append({
             COL_OUT_SITE:     site,
@@ -86,7 +93,7 @@ def calculate_sla(
         })
 
         logger.debug(
-            "%-30s | Kesinti: %2d | Downtime: %8.2f dk | Avail: %9.4f%% | %s",
+            "%-30s | Outages: %2d | Downtime: %8.2f mins | Avail: %9.4f%% | %s",
             site,
             stats["count"],
             downtime_min,
@@ -97,13 +104,14 @@ def calculate_sla(
     summary_df = pd.DataFrame(rows)
 
     if not summary_df.empty:
-        passed = (summary_df[COL_OUT_SLA] == "Passed").sum()
-        failed = (summary_df[COL_OUT_SLA] == "Failed").sum()
+        passed = (summary_df[COL_OUT_SLA] == SLA_STATUS_PASSED).sum()
+        failed = (summary_df[COL_OUT_SLA] == SLA_STATUS_FAILED).sum()
         logger.info(
-            "SLA hesabi tamamlandi. Toplam site: %d | Passed: %d | Failed: %d",
+            "SLA calculation completed. Total sites: %d | Passed: %d | Failed: %d",
             len(summary_df), passed, failed,
         )
     else:
-        logger.warning("Hesaplanacak site bulunamadi; bos DataFrame donduruluyor.")
+        logger.warning("No sites to calculate; returning empty DataFrame.")
 
     return summary_df
+

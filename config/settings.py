@@ -15,6 +15,8 @@ TZ: ZoneInfo = ZoneInfo(TIMEZONE)
 
 # SLA hedef eşiği (%)
 SLA_THRESHOLD_PCT: float = 99.90
+SLA_STATUS_PASSED: str = "Passed"
+SLA_STATUS_FAILED: str = "Failed"
 
 # Rapor dönemlerinin toplam dakika karşılıkları
 PERIOD_MINUTES: dict[int, int] = {

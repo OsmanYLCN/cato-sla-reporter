@@ -20,11 +20,13 @@ SLA_STATUS_FAILED: str = "Failed"
 
 # Rapor dönemlerinin toplam dakika karşılıkları
 PERIOD_MINUTES: dict[int, int] = {
+    0: 0,        # Özel tarih aralığı
     1: 43_200,   # 30 gün
     3: 129_600,  # 90 gün
 }
 
 PERIOD_LABELS: dict[int, str] = {
+    0: "Custom Range",
     1: "Last 1 Month",
     3: "Last 3 Months",
 }

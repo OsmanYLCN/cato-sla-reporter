@@ -10,6 +10,7 @@ from config.settings import (
     TZ,
 )
 from data_ingestion.csv_reader import CsvLogReader
+from data_ingestion.cato_api_client import CatoApiClient
 from engine.leg_detector import detect_legs
 from engine.sla_calculator import calculate_sla
 from engine.state_machine import detect_outages
@@ -31,26 +32,41 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=(
             "Examples:\n"
-            "  python main.py --input events.csv --period 1\n"
-            "  python main.py --input events.csv --period 3 --output ./reports\n"
-            "  python main.py --input events.csv --period 1 --mode auto\n"
-            "  python main.py --input events.csv --period 3 --mode auto\n"
+            "  python main.py --source csv --input events.csv --period 1\n"
+            "  python main.py --source api --period 1\n"
+            "  python main.py --source api --date-from 2026-08-01 --date-to 2026-08-31\n"
         ),
     )
 
     parser.add_argument(
+        "--source",
+        choices=["csv", "api"],
+        default="csv",
+        help="Data ingestion source. (Default: csv)",
+    )
+    parser.add_argument(
         "--input",
         metavar="CSV_PATH",
-        required=True,
-        help="Path to Cato Networks log CSV file.",
+        required=False,
+        help="Path to Cato Networks log CSV file. Required if --source is csv.",
     )
     parser.add_argument(
         "--period",
         type=int,
         choices=[1, 3],
-        required=True,
+        required=False,
         metavar="{1,3}",
-        help="Report period in months: 1 (Last 30 Days / Last 1 Month) or 3 (Last 90 Days / Last 3 Months).",
+        help="Report period in months: 1 (Last 30 Days) or 3 (Last 90 Days).",
+    )
+    parser.add_argument(
+        "--date-from",
+        metavar="YYYY-MM-DD",
+        help="Explicit start date for API mode (e.g., 2026-08-01). Overrides --period.",
+    )
+    parser.add_argument(
+        "--date-to",
+        metavar="YYYY-MM-DD",
+        help="Explicit end date for API mode (e.g., 2026-08-31). Overrides --period.",
     )
     parser.add_argument(
         "--mode",
@@ -59,7 +75,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help=(
             "Execution mode. "
             "'manual': Rolling last 30/90 days from today. "
-            "'auto': Last 1 or 3 completed calendar months (for scheduled jobs). "
+            "'auto': Last 1 or 3 completed calendar months. "
             "(Default: manual)"
         ),
     )
@@ -70,15 +86,49 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Directory to save the Excel report. (Default: ./output)",
     )
 
-    return parser.parse_args(argv)
+    args = parser.parse_args(argv)
+
+    # Validation
+    if args.source == "csv" and not args.input:
+        parser.error("--input is required when --source is csv")
+
+    if args.date_from or args.date_to:
+        if not (args.date_from and args.date_to):
+            parser.error("--date-from and --date-to must be provided together.")
+        args.period = 0  # 0 indicates Custom Range
+
+    if not args.period and args.period != 0:
+        parser.error("--period is required unless --date-from and --date-to are provided.")
+
+    return args
 
 
 def resolve_period_dates(
     period_months: int,
     mode: str,
+    date_from: str | None = None,
+    date_to: str | None = None,
     now: datetime | None = None,
 ) -> tuple[datetime, datetime]:
     """Çalışma moduna göre raporlama başlangıç ve bitiş tarihlerini hesaplar."""
+    if date_from and date_to:
+        start_date = datetime.strptime(date_from, "%Y-%m-%d").date()
+        end_date = datetime.strptime(date_to, "%Y-%m-%d").date()
+        period_start = datetime(
+            start_date.year, start_date.month, start_date.day,
+            0, 0, 0, tzinfo=TZ,
+        )
+        period_end = datetime(
+            end_date.year, end_date.month, end_date.day,
+            23, 59, 59, 999999, tzinfo=TZ,
+        )
+        logger.info(
+            "Report period resolved [explicit dates]: %s → %s",
+            period_start.strftime("%Y-%m-%d %H:%M:%S %Z"),
+            period_end.strftime("%Y-%m-%d %H:%M:%S %Z"),
+        )
+        return period_start, period_end
+
     now_local = now or datetime.now(tz=TZ)
     today = now_local.date()
 
@@ -135,8 +185,8 @@ def run(args: argparse.Namespace) -> None:
     logger.info("=" * 60)
     logger.info("Cato SLA Reporter initialized.")
     logger.info(
-        "Parameters: input='%s' | period=%d month(s) | mode=%s",
-        args.input, args.period, args.mode,
+        "Parameters: source='%s' | input='%s' | period=%d month(s) | mode=%s | date_from=%s | date_to=%s",
+        args.source, args.input, args.period, args.mode, args.date_from, args.date_to,
     )
     logger.info("=" * 60)
 
@@ -144,11 +194,19 @@ def run(args: argparse.Namespace) -> None:
     period_start, period_end = resolve_period_dates(
         period_months=args.period,
         mode=args.mode,
+        date_from=args.date_from,
+        date_to=args.date_to,
     )
 
-    # 2. Log dosyasını okut
-    reader = CsvLogReader(args.input)
-    raw_df = reader.read()
+    # 2. Log dosyasını okut veya API'den çek
+    if args.source == "api":
+        logger.info("Fetching data from Cato GraphQL API...")
+        client = CatoApiClient()
+        raw_df = client.fetch_events(period_start, period_end)
+    else:
+        logger.info("Reading data from CSV file: %s", args.input)
+        reader = CsvLogReader(args.input)
+        raw_df = reader.read()
 
     if raw_df.empty:
         logger.error("Could not read data or CSV is empty. Aborting.")

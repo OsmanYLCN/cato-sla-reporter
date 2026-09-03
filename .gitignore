@@ -41,6 +41,11 @@ sample_data/*
 # Environment variables
 .env
 
+# Scratch and temporary debug files
+scratch*
+*.dump
+schema_dump.json
+
 # IDE
 .vscode/
 .idea/

@@ -34,27 +34,31 @@ def _make_record(
     iface: str = "WAN1",
     role: str  = "primary",
 ) -> dict:
-    """Test icin ham API kaydi olusturur (flatFields yapisi)."""
+    """Test icin ham API kaydi olusturur (events query fieldsMap yapisi)."""
     return {
-        "time": time_iso,
-        "fieldsMap": {},
+        "fieldsMap": {
+            "src_site_name":    site,
+            "event_sub_type":   event,
+            "socket_interface": iface,
+            "socket_role":      role,
+            "time":             time_iso,
+        },
         "flatFields": [
-            {"fieldName": "src_site_name",   "value": site},
-            {"fieldName": "event_sub_type",  "value": event},
-            {"fieldName": "socket_interface","value": iface},
-            {"fieldName": "socket_role",     "value": role},
+            ["src_site_name",    site],
+            ["event_sub_type",   event],
+            ["socket_interface", iface],
+            ["socket_role",      role],
+            ["time",             time_iso],
         ],
     }
 
 
 def _api_response(records: list[dict], marker_in: str | None = None, marker_out: str = "m1") -> dict:
-    """Basarili API yaniti dict'i olusturur."""
+    """Basarili API yaniti dict'i olusturur (events query formati)."""
     return {
         "data": {
-            "eventsFeed": {
-                "marker": marker_out,
-                "fetchedCount": len(records),
-                "accounts": [{"records": records}],
+            "events": {
+                "records": records,
             }
         }
     }
@@ -68,10 +72,12 @@ def _make_client() -> CatoApiClient:
 # Kimlik dogrulama testleri
 # ---------------------------------------------------------------------------
 class TestClientInit:
+    @patch("data_ingestion.cato_api_client.CATO_API_KEY", "")
     def test_raises_if_no_api_key(self):
         with pytest.raises(CatoApiError, match="API Key"):
             CatoApiClient(api_key="", account_id=_FAKE_ACC)
 
+    @patch("data_ingestion.cato_api_client.CATO_ACCOUNT_ID", "")
     def test_raises_if_no_account_id(self):
         with pytest.raises(CatoApiError, match="Account ID"):
             CatoApiClient(api_key=_FAKE_KEY, account_id="")
@@ -122,17 +128,13 @@ class TestParseTimestamp:
 class TestFetchEvents:
     def test_single_page_returns_dataframe(self):
         record = _make_record("2026-07-10T08:00:00Z")
-        response = _api_response([record], marker_out="m1")
-        # Ikinci cagri: fetchedCount=0 ile pagination biter
-        terminal = _api_response([], marker_out="m1")
+        response = _api_response([record])
 
         with patch("requests.post") as mock_post:
-            mock_post.side_effect = [
-                MagicMock(status_code=200, raise_for_status=lambda: None,
-                          json=lambda: response),
-                MagicMock(status_code=200, raise_for_status=lambda: None,
-                          json=lambda: terminal),
-            ]
+            mock_post.return_value = MagicMock(
+                status_code=200, raise_for_status=lambda: None,
+                json=lambda: response,
+            )
             client = _make_client()
             df = client.fetch_events(_PERIOD_START, _PERIOD_END)
 
@@ -179,16 +181,13 @@ class TestFetchEvents:
             _make_record("2026-07-06T10:00:00Z", site="Site-B"),
             _make_record("2026-07-07T10:00:00Z", site="Site-A", event="Connected"),
         ]
-        response = _api_response(records, marker_out="m1")
-        terminal = _api_response([], marker_out="m1")
+        response = _api_response(records)
 
         with patch("requests.post") as mock_post:
-            mock_post.side_effect = [
-                MagicMock(status_code=200, raise_for_status=lambda: None,
-                          json=lambda: response),
-                MagicMock(status_code=200, raise_for_status=lambda: None,
-                          json=lambda: terminal),
-            ]
+            mock_post.return_value = MagicMock(
+                status_code=200, raise_for_status=lambda: None,
+                json=lambda: response,
+            )
             client = _make_client()
             df = client.fetch_events(_PERIOD_START, _PERIOD_END)
 
@@ -257,9 +256,9 @@ class TestNormalise:
                 "fieldsMap": {},
                 "flatFields": [
                     # site yok
-                    {"fieldName": "event_sub_type",  "value": "Disconnected"},
-                    {"fieldName": "socket_interface", "value": "WAN1"},
-                    {"fieldName": "socket_role",      "value": "primary"},
+                    ["event_sub_type",  "Disconnected"],
+                    ["socket_interface", "WAN1"],
+                    ["socket_role",      "primary"],
                 ],
             }
         ]
@@ -277,12 +276,12 @@ class TestNormalise:
         """flatFields yoksa fieldsMap'ten okuyabilmeli."""
         records = [
             {
-                "time": "2026-07-10T08:00:00Z",
                 "fieldsMap": {
-                    "src_site_name":    ["Site-Z"],
-                    "event_sub_type":   ["Connected"],
-                    "socket_interface": ["WAN2"],
-                    "socket_role":      ["secondary"],
+                    "src_site_name":    "Site-Z",
+                    "event_sub_type":   "Connected",
+                    "socket_interface": "WAN2",
+                    "socket_role":      "secondary",
+                    "time":             "2026-07-10T08:00:00Z",
                 },
                 "flatFields": [],
             }

@@ -8,6 +8,7 @@ from config.settings import (
     COL_ROLE,
     COL_SITE,
     COL_TIME,
+    EVENT_TYPE_ALIASES,
     TIMEZONE,
     TZ,
 )
@@ -35,6 +36,27 @@ def transform(df: pd.DataFrame) -> pd.DataFrame:
             df[col] = df[col].str.strip()
 
     logger.debug("String normalizasyonu tamamlandi.")
+
+    # Cato API'sinden gelen event_sub_type degerlerini kanonik forma donustur
+    # (Reconnected -> Connected, Site Disconnected -> Disconnected, vb.)
+    if COL_EVENT in df.columns:
+        before_alias = len(df)
+        df[COL_EVENT] = df[COL_EVENT].map(
+            lambda v: EVENT_TYPE_ALIASES.get(v, v)
+        )
+        # Alias tablosunda olmayan (taninmayan) event tiplerini filtrele
+        from config.settings import VALID_EVENT_TYPES
+        unknown_mask = ~df[COL_EVENT].isin(VALID_EVENT_TYPES)
+        unknown_count = unknown_mask.sum()
+        if unknown_count > 0:
+            unknown_vals = df.loc[unknown_mask, COL_EVENT].unique().tolist()
+            logger.debug(
+                "%d kayit taninmayan event_sub_type nedeniyle atiliyor: %s",
+                unknown_count, unknown_vals,
+            )
+            df = df[~unknown_mask].reset_index(drop=True)
+
+    logger.debug("Event tipi normalizasyonu tamamlandi.")
 
     # Zaman damgasını UTC çevirme
     try:

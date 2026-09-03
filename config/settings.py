@@ -51,6 +51,21 @@ COL_ROLE: str = "socket_role"
 
 VALID_EVENT_TYPES: set[str] = {"Connected", "Disconnected"}
 
+# Cato API'sinin gonderdigi tum event_sub_type degerlerinin kanonik karsiligi.
+# "Connected" veya "Disconnected" olarak normalize edilir.
+# Bu sayede transformer ve state machine tutarli calisir.
+EVENT_TYPE_ALIASES: dict[str, str] = {
+    # Baglanti tipleri -> Connected
+    "Connected":                     "Connected",
+    "Reconnected":                   "Connected",   # yeniden baglandi = baglandi
+    "Site Connected":                "Connected",
+    # Kopus tipleri -> Disconnected
+    "Disconnected":                  "Disconnected",
+    "Site Disconnected":             "Disconnected",
+    # Failover durumu: bir bacak devralinca digeri kopuk sayilir
+    "Socket Fail-Over":              "Disconnected",
+}
+
 # Dosya ve dizin yolları
 OUTPUT_DIR: str = "output"
 LOG_DIR: str = "logs"

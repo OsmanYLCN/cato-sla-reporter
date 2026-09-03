@@ -4,64 +4,85 @@ A modular Python tool to calculate monthly and quarterly SLA/Availability metric
 
 For sites with multiple WAN links or HA configurations, the tool verifies if all interfaces are down simultaneously before recording a true outage, applying a time-window tolerance to filter out transient connection flaps.
 
-## Installation
+## Installation & Setup
 
-```bash
-pip install -r requirements.txt
-```
+1. Install dependencies:
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+2. Configure environment variables (required for API mode):
+   ```bash
+   cp .env.example .env
+   ```
+   Provide your Cato credentials in `.env`:
+   ```env
+   CATO_ACCOUNT_ID=16531
+   CATO_API_KEY=your_api_key_here
+   CATO_API_ENDPOINT=https://api.catonetworks.com/api/v1/graphql2
+   ```
 
 ## Usage
 
-### 1. Manual Mode
-Calculates SLA for a rolling period (last 30 or 90 days) from today.
+### 1. API Mode (Live Cato GraphQL Ingestion)
+Fetches connectivity event logs directly from Cato Networks via GraphQL API.
+
+```bash
+# Last 30 days (rolling)
+python main.py --source api --period 1
+
+# Last 90 days (rolling)
+python main.py --source api --period 3
+
+# Specific calendar month / custom date range
+python main.py --source api --date-from 2026-08-01 --date-to 2026-08-31
+```
+
+### 2. CSV Mode (Local File Ingestion)
+Processes pre-exported Cato event CSV files (legacy mode).
 
 ```bash
 # Last 30 days
-python main.py --input sample_data/Cato_events_sample.csv --period 1
+python main.py --source csv --input sample_data/Cato_events_sample.csv --period 1
 
-# Last 90 days
-python main.py --input sample_data/Cato_events_sample.csv --period 3
+# Previous full calendar month (for Cron / Schedulers)
+python main.py --source csv --input sample_data/Cato_events_sample.csv --period 1 --mode auto
 ```
 
-### 2. Auto Mode (for Cron / Schedulers)
-Calculates SLA for the previous full calendar month or quarter.
-
-```bash
-# Previous calendar month
-python main.py --input /path/to/events.csv --period 1 --mode auto
-```
-
-### Parameters
+### CLI Parameters
 
 | Argument | Required | Default | Description |
 |---|---|---|---|
-| `--input` | Yes | None | Path to the event log CSV file. |
-| `--period` | Yes | None | `1` (for 1 Month) or `3` (for 3 Months). |
-| `--mode` | No | `manual` | `manual` (rolling days) or `auto` (previous calendar month/quarter). |
-| `--output` | No | `./output` | Destination folder for the Excel report. |
+| `--source` | No | `csv` | Ingestion mode: `api` (direct Cato GraphQL) or `csv` (file import). |
+| `--input` | Conditional | None | Path to CSV log file. **Required** when `--source csv`. |
+| `--period` | Conditional | None | Report period: `1` (1 Month) or `3` (3 Months). Required unless using custom dates. |
+| `--date-from` | Optional | None | Start date for custom range (`YYYY-MM-DD`). Used with `--date-to`. |
+| `--date-to` | Optional | None | End date for custom range (`YYYY-MM-DD`). Used with `--date-from`. |
+| `--mode` | No | `manual` | `manual` (rolling days) or `auto` (completed calendar month/quarter). |
+| `--output` | No | `./output` | Destination folder for the generated Excel report. |
 
 ## Core Logic & Business Rules
 
-* **Timezone Conversion**: Timestamps in the CSV (UTC) are converted to `Europe/Istanbul` (UTC+3) before processing.
+* **Timezone Normalization**: UTC timestamps (from API or CSV) are normalized to `Europe/Istanbul` (UTC+3).
 * **Outage Detection**: 
-  * A site is only considered DOWN if all its interfaces (dynamically detected from the data) are down at the same time.
-  * **Tolerance (30 seconds)**: If all interfaces disconnect, but any interface reconnects within 30 seconds, it is ignored as a transient flap.
-  * **Net Downtime**: Calculated as the duration between the initial disconnect (after tolerance passes) and the first interface recovery.
-  * **Open Outages**: Outages still active at the end of the reporting period are calculated up to the period end boundary.
+  * A site is only flagged as DOWN if all its interfaces (dynamically detected) disconnect concurrently.
+  * **Correlation Tolerance (30s)**: Transient disconnects lasting $\le 30$ seconds before any interface recovers are treated as flaps and discarded.
+  * **Net Downtime**: Measured from initial drop to first interface recovery.
+  * **Open Outages**: Active outages at period boundaries are capped at the period end timestamp.
 * **Availability Formula**:
   $$\text{Availability} = \frac{\text{Total Period Minutes} - \text{Total Downtime}}{\text{Total Period Minutes}} \times 100$$
-  * **Target SLA**: `99.90%`. Sites with availability below this are marked as `Failed`; otherwise `Passed`.
-  * **Total Period Minutes**: Fixed at `43200` (1 Month) and `129600` (3 Months).
+  * **Target SLA**: `99.90%`. Sites meeting or exceeding this are `Passed`, otherwise `Failed`.
 
 ## Outputs
 
-The tool generates `output/SLA_Report_<Period>M_<Date>_<Time>.xlsx` (e.g. `SLA_Report_1M_2026-08-31_14-30-00.xlsx`) containing:
-1. **SLA Summary**: Site metrics (Downtime, Availability %, and SLA Status highlighted in green/red).
-2. **Outage Details**: Granular audit log showing start/end timestamps and duration of each outage.
+Generated Excel reports are saved to `output/SLA_Report_<Period>_<Timestamp>.xlsx` containing 3 dedicated sheets:
+1. **SLA Summary**: Site-by-site availability metrics, downtime minutes, and SLA compliance status (color-coded).
+2. **Outage Details**: Comprehensive audit log recording start/end timestamps and duration for each outage event.
+3. **Overall Summary**: Executive overview showing total site count, overall availability average, and SLA pass/fail rates.
 
 ## Tests
 
-To run unit tests:
+Run the test suite (74 unit tests covering API client, state machine, CLI, and calculators):
 ```bash
 pytest tests/ -v
 ```

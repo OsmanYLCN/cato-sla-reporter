@@ -3,10 +3,16 @@ data_ingestion/cato_api_client.py
 
 Cato Networks GraphQL API istemcisi.
 
-Belirtilen zaman araligindaki connectivity ve socket management event'lerini
-marker tabanli pagination ile ceker, mevcut pipeline'in beklettigi DataFrame
-formatina donusturur.
+Belirtilen zaman araligindaki connectivity event'lerini 'events' query'si
+ile tarih bazli ceker, mevcut pipeline'in bekledigi DataFrame formatina
+donusturur.
+
+NOT: Cato'nun 'eventsFeed' API'si sadece canli (live) kuyruk akisi icin
+tasarlanmistir ve gecmis verilere tarih filtrelemesi desteklemiyor.
+Bunun yerine, gecmise donuk tarih aralikli sorgulama icin 'events' query'si
+kullanilir; bu sorgu 'timeFrame' parametresiyle belirli bir araligi destekler.
 """
+import math
 import time
 from datetime import datetime
 from zoneinfo import ZoneInfo
@@ -19,7 +25,6 @@ from config.settings import (
     CATO_API_ENDPOINT,
     CATO_API_KEY,
     CATO_API_MAX_RETRIES,
-    CATO_API_PAGE_SIZE,
     CATO_API_RETRY_DELAY_SECONDS,
     CATO_API_TIMEOUT_SECONDS,
     COL_EVENT,
@@ -36,37 +41,46 @@ logger = get_logger(__name__)
 _UTC = ZoneInfo("UTC")
 
 # ---------------------------------------------------------------------------
-# GraphQL Sorgu Sabiti
+# GraphQL Sorgu Sabiti — events (tarih aralikli, historik veri)
 # ---------------------------------------------------------------------------
-_EVENTS_FEED_QUERY = """
+_EVENTS_QUERY = """
 query GetConnectivityEvents(
-  $accountIDs: [ID!]!
-  $marker:     String
-  $filters:    [EventFieldFilterInput]
-  $limit:      Int
+  $accountID:  ID!
+  $timeFrame:  TimeFrame!
+  $filters:    [EventsFilter!]
+  $dimensions: [EventsDimension]
+  $measures:   [EventsMeasure]
 ) {
-  eventsFeed(
-    accountIDs: $accountIDs
-    marker:     $marker
+  events(
+    accountID:  $accountID
+    timeFrame:  $timeFrame
     filters:    $filters
-    limit:      $limit
+    dimensions: $dimensions
+    measures:   $measures
   ) {
-    marker
-    fetchedCount
-    accounts {
-      records {
-        time
-        fieldsMap
-        flatFields { fieldName value }
-      }
+    records {
+      flatFields
+      fieldsMap
     }
   }
 }
 """
 
-# Filtrelenecek olay tipleri
-_EVENT_TYPE_FILTERS = [
-    {"fieldName": "event_type", "operator": "is", "values": ["Connectivity"]},
+# Zorunlu boyutlar (istenen alanlar) ve olcum
+_DIMENSIONS = [
+    {"fieldName": "event_sub_type"},
+    {"fieldName": "src_site_name"},
+    {"fieldName": "socket_interface"},
+    {"fieldName": "socket_role"},
+    {"fieldName": "time"},
+]
+
+_MEASURES = [
+    {"fieldName": "event_count", "aggType": "count"}
+]
+
+_FILTERS = [
+    {"fieldName": "event_type", "operator": "is", "values": ["Connectivity"]}
 ]
 
 
@@ -77,6 +91,9 @@ class CatoApiError(Exception):
 class CatoApiClient:
     """
     Cato Networks GraphQL API istemcisi.
+
+    'events' query'si ile belirtilen tarih araligindaki connectivity
+    event loglarini ceker ve pipeline'a uygun DataFrame olarak dondurur.
 
     Kullanim:
         client = CatoApiClient()
@@ -121,6 +138,9 @@ class CatoApiClient:
         """
         Belirtilen zaman araligindaki connectivity event'lerini API'den ceker.
 
+        Cato 'events' query'si UTC formatli tarih araligini destekler:
+          utc.YYYY-MM-{DD/HH:MM:SS--DD/HH:MM:SS}
+
         Dondurulen DataFrame sutunlari mevcut pipeline ile uyumludur:
             COL_SITE  (src_site_name)
             COL_TIME  (time)           -- timezone-aware (Europe/Istanbul)
@@ -141,7 +161,10 @@ class CatoApiClient:
             period_end.strftime("%Y-%m-%d %H:%M:%S %Z"),
         )
 
-        raw_records = self._paginate(period_start=period_start, period_end=period_end)
+        time_frame = self._build_timeframe(period_start, period_end)
+        logger.info("Kullanilan timeFrame: %s", time_frame)
+
+        raw_records = self._fetch_all(time_frame)
 
         if not raw_records:
             logger.warning("API'den hic event kaydi donmedi.")
@@ -149,16 +172,14 @@ class CatoApiClient:
 
         df = self._normalise(raw_records)
 
-        # Zaman araligini istemci tarafinda filtrele
+        # Zaman araligini istemci tarafinda filtrele (hassasiyet icin)
         before_filter = len(df)
         mask = (df[COL_TIME] >= period_start) & (df[COL_TIME] <= period_end)
         df = df[mask].reset_index(drop=True)
         filtered_out = before_filter - len(df)
 
         if filtered_out > 0:
-            logger.debug(
-                "%d kayit zaman aralik filtresi sonrasi elendi.", filtered_out
-            )
+            logger.debug("%d kayit zaman aralik filtresi sonrasi elendi.", filtered_out)
 
         logger.info(
             "API'den %d ham kayit alindi, zaman filtresinden sonra %d kayit isleme alinacak.",
@@ -168,79 +189,59 @@ class CatoApiClient:
         return df
 
     # -----------------------------------------------------------------------
-    # Pagination
+    # TimeFrame Olusturma
     # -----------------------------------------------------------------------
 
-    def _paginate(
-        self,
-        period_start: datetime,
-        period_end: datetime,
-    ) -> list[dict]:
+    @staticmethod
+    def _build_timeframe(period_start: datetime, period_end: datetime) -> str:
         """
-        marker tabanli pagination dongusu ile tum sayfalar cekilir.
+        Cato API'sinin kabul ettigi UTC tarih aralikli timeFrame stringini olusturur.
 
-        Cato eventsFeed bir kuyruk sistemi gibi calisir:
-          1. marker=None ile ilk istek -> marker deger alinir
-          2. Bu marker ile bir sonraki istek -> yeni marker + records gelir
-          3. marker ayni kalana kadar devam edilir (kuyruk sonu)
+        Cato, tek ay icin ozel bir format ister:
+          utc.YYYY-MM-{DD/HH:MM:SS--DD/HH:MM:SS}  (ay yil prefix ile)
+
+        Birden fazla ay icin ise:
+          utc.YYYY-MM-DD/HH:MM:SS--YYYY-MM-DD/HH:MM:SS  formatini dener;
+          API kabul etmezse last.PxD fallback kullanilir.
+
+        NOT: UTC donusumu yapilir cunku Cato API UTC beklentisindedir.
         """
-        all_records: list[dict] = []
-        marker: str | None = None
-        page = 0
+        start_utc = period_start.astimezone(ZoneInfo("UTC"))
+        end_utc   = period_end.astimezone(ZoneInfo("UTC"))
 
-        while True:
-            page += 1
-            logger.debug("Sayfa %d cekiliyor (marker=%s)...", page, marker or "baslangic")
-
-            response = self._request_with_retry(marker=marker)
-            feed = response.get("data", {}).get("eventsFeed", {})
-
-            new_marker    = feed.get("marker")
-            fetched_count = feed.get("fetchedCount", 0)
-            accounts      = feed.get("accounts", [])
-
-            page_records: list[dict] = []
-            for account in accounts:
-                page_records.extend(account.get("records", []))
-
-            all_records.extend(page_records)
-            logger.debug(
-                "Sayfa %d: %d kayit alindi, toplam: %d",
-                page, len(page_records), len(all_records),
+        if start_utc.year == end_utc.year and start_utc.month == end_utc.month:
+            # Ayni takvim ayindaki aralik — tek parca, Cato'nun ozel formati
+            return (
+                f"utc.{start_utc.year}-{start_utc.month:02d}-"
+                f"{{{start_utc.day:02d}/{start_utc.hour:02d}:{start_utc.minute:02d}:{start_utc.second:02d}"
+                f"--"
+                f"{end_utc.day:02d}/{end_utc.hour:02d}:{end_utc.minute:02d}:{end_utc.second:02d}}}"
             )
-
-            # Durdurma kosullari
-            if not new_marker or new_marker == marker or fetched_count == 0:
-                logger.debug("Pagination tamamlandi. Toplam %d kayit.", len(all_records))
-                break
-
-            # Erken durdurma: son kayit period_end'i gecti mi
-            if page_records:
-                last_ts = self._parse_timestamp(page_records[-1].get("time", ""))
-                if last_ts and last_ts > period_end:
-                    logger.debug(
-                        "Son kayit (%s) period_end'i geciyor, pagination durduruluyor.",
-                        last_ts,
-                    )
-                    break
-
-            marker = new_marker
-
-        return all_records
+        else:
+            # Birden fazla takvim ayini kapsayan aralik
+            # Cato'nun "last.PxD" formatini kullan — bugunun geri sayimina gore calisir.
+            # Bu nedenle period_end'i bugun gibi kabul ederek gun sayisi hesaplanir.
+            from datetime import timezone
+            now_utc = datetime.now(tz=timezone.utc)
+            days = (now_utc.date() - start_utc.date()).days
+            if days < 1:
+                days = 1
+            return f"last.P{days}D"
 
     # -----------------------------------------------------------------------
-    # HTTP Istegi
+    # Veri Cekme
     # -----------------------------------------------------------------------
 
-    def _request_with_retry(self, marker: str | None) -> dict:
-        """HTTP POST istegini yeniden deneme mekanizmasiyla gonderir."""
+    def _fetch_all(self, time_frame: str) -> list[dict]:
+        """API'den tum kayitlari ceker."""
         payload = {
-            "query": _EVENTS_FEED_QUERY,
+            "query": _EVENTS_QUERY,
             "variables": {
-                "accountIDs": [self._account_id],
-                "marker":     marker,
-                "filters":    _EVENT_TYPE_FILTERS,
-                "limit":      CATO_API_PAGE_SIZE,
+                "accountID":  self._account_id,
+                "timeFrame":  time_frame,
+                "filters":    _FILTERS,
+                "dimensions": _DIMENSIONS,
+                "measures":   _MEASURES,
             },
         }
 
@@ -262,7 +263,13 @@ class CatoApiClient:
                         f"GraphQL hatalari: {'; '.join(error_msgs)}"
                     )
 
-                return data
+                records = (
+                    data.get("data", {})
+                        .get("events", {})
+                        .get("records", [])
+                )
+                logger.info("API'den %d kayit alindi.", len(records))
+                return records
 
             except requests.exceptions.Timeout as exc:
                 last_exc = exc
@@ -304,33 +311,33 @@ class CatoApiClient:
         """
         Cato API ham kayitlarini pipeline DataFrame formatina donusturur.
 
-        Cato API iki yapi sunar:
-          - fieldsMap: {alan_adi: [deger_listesi]} sozlugu
-          - flatFields: [{fieldName, value}] listesi
-
-        Her ikisini de dener; basarisiz alanlar icin diger yapiya fallback yapar.
+        events query'si fieldsMap ve flatFields (list of lists) olarak
+        iki format dondurur. Her ikisini de destekler.
         """
         rows: list[dict] = []
 
         for rec in records:
+            # fieldsMap tercihli yol (events query'si genellikle bunu dolu dondurur)
+            fields_map: dict = rec.get("fieldsMap") or {}
+
+            # flatFields fallback (list of [name, value] pairs)
             flat: dict[str, str] = {}
             for field in rec.get("flatFields", []):
-                name  = field.get("fieldName", "")
-                value = field.get("value", "")
-                if name:
-                    flat[name] = value
-
-            fields_map: dict[str, list] = rec.get("fieldsMap") or {}
+                if isinstance(field, list) and len(field) >= 2:
+                    name = str(field[0])
+                    value = str(field[1]) if field[1] is not None else ""
+                    if name:
+                        flat[name] = value
 
             def _get(key: str) -> str:
-                if key in flat:
-                    return flat[key]
-                vals = fields_map.get(key)
-                if vals:
-                    return str(vals[0]) if isinstance(vals, list) else str(vals)
-                return ""
+                if key in fields_map:
+                    val = fields_map[key]
+                    if isinstance(val, list):
+                        return str(val[0]) if val else ""
+                    return str(val) if val is not None else ""
+                return flat.get(key, "")
 
-            timestamp_raw = rec.get("time") or _get("time") or _get("event_timestamp")
+            timestamp_raw = _get("time") or _get("event_timestamp")
             site  = _get("src_site_name") or _get("site_name") or _get("site")
             event = _get("event_sub_type") or _get("event_name") or _get("action")
             iface = _get("socket_interface") or _get("interface")
@@ -372,8 +379,6 @@ class CatoApiClient:
         """
         Cato API'sinin gonderebilecegi farkli timestamp formatlarini parse eder.
         Her zaman timezone-aware Europe/Istanbul olarak dondurur.
-
-        Cato genellikle Unix ms timestamp veya ISO 8601 string gonderir.
         """
         if not raw:
             return None

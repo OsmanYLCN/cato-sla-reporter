@@ -28,4 +28,5 @@ jobs:
 
       - name: Execute pytest suite
         run: |
-          pytest tests/ -v
+          python -m pytest tests/ -v
+

@@ -17,7 +17,7 @@ For sites with multiple WAN links or HA configurations, the tool verifies if all
    ```
    Provide your Cato credentials in `.env`:
    ```env
-   CATO_ACCOUNT_ID=16531
+   CATO_ACCOUNT_ID=your_account_id_here
    CATO_API_KEY=your_api_key_here
    CATO_API_ENDPOINT=https://api.catonetworks.com/api/v1/graphql2
    ```

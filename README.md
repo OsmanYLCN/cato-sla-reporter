@@ -24,8 +24,15 @@ For sites with multiple WAN links or HA configurations, the tool verifies if all
 
 ## Usage
 
-### 1. API Mode (Live Cato GraphQL Ingestion)
-Fetches connectivity event logs directly from Cato Networks via GraphQL API.
+### 1. Interactive Terminal UI (Recommended for End-Users)
+Run without arguments in an interactive terminal to launch the guided Terminal UI:
+```bash
+python main.py
+```
+This launches a corporate banner, prompts you to select the ingestion source (API or CSV from `sample_data/`), allows period or custom date selection, renders real-time pipeline progress steps, and displays a formatted Executive Summary Card upon completion.
+
+### 2. API Mode (Live Cato GraphQL Ingestion - Automation / CLI)
+Fetches connectivity event logs directly from Cato Networks via GraphQL API headlessly.
 
 ```bash
 # Last 30 days (rolling)
@@ -38,15 +45,15 @@ python main.py --source api --period 3
 python main.py --source api --date-from 2026-08-01 --date-to 2026-08-31
 ```
 
-### 2. CSV Mode (Local File Ingestion)
-Processes pre-exported Cato event CSV files (legacy mode).
+### 3. CSV Mode (Local File Ingestion - Automation / CLI)
+Processes pre-exported Cato event CSV files headlessly.
 
 ```bash
 # Last 30 days
-python main.py --source csv --input sample_data/Cato_events_sample.csv --period 1
+python main.py --source csv --input sample_data/events_2026-08-31_08-22-02.csv --period 1
 
 # Previous full calendar month (for Cron / Schedulers)
-python main.py --source csv --input sample_data/Cato_events_sample.csv --period 1 --mode auto
+python main.py --source csv --input sample_data/events_2026-08-31_08-22-02.csv --period 1 --mode auto
 ```
 
 ### CLI Parameters
@@ -54,12 +61,13 @@ python main.py --source csv --input sample_data/Cato_events_sample.csv --period 
 | Argument | Required | Default | Description |
 |---|---|---|---|
 | `--source` | No | `csv` | Ingestion mode: `api` (direct Cato GraphQL) or `csv` (file import). |
-| `--input` | Conditional | None | Path to CSV log file. **Required** when `--source csv`. |
+| `--input` | Conditional | None | Path to CSV log file. **Required** when `--source csv` in CLI mode. |
 | `--period` | Conditional | None | Report period: `1` (1 Month) or `3` (3 Months). Required unless using custom dates. |
 | `--date-from` | Optional | None | Start date for custom range (`YYYY-MM-DD`). Used with `--date-to`. |
 | `--date-to` | Optional | None | End date for custom range (`YYYY-MM-DD`). Used with `--date-from`. |
 | `--mode` | No | `manual` | `manual` (rolling days) or `auto` (completed calendar month/quarter). |
 | `--output` | No | `./output` | Destination folder for the generated Excel report. |
+| `--interactive` | No | False | Explicitly force interactive Terminal UI mode. |
 
 ## Core Logic & Business Rules
 
@@ -82,7 +90,7 @@ Generated Excel reports are saved to `output/SLA_Report_<Period>_<Timestamp>.xls
 
 ## Tests
 
-Run the test suite (74 unit tests covering API client, state machine, CLI, and calculators):
+Run the test suite (87 unit tests covering API client, state machine, TUI, CLI, and calculators):
 ```bash
 pytest tests/ -v
 ```

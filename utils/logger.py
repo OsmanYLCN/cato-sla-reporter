@@ -1,10 +1,10 @@
 import logging
 import os
 import sys
-from datetime import datetime
+from logging.handlers import TimedRotatingFileHandler
 from pathlib import Path
 
-from config.settings import LOG_DIR, LOG_FORMAT, LOG_DATE_FORMAT, LOG_LEVEL
+from config.settings import LOG_DIR, LOG_FORMAT, LOG_DATE_FORMAT, LOG_LEVEL, LOG_RETENTION_DAYS
 
 # Konsol log çıktıları için renk tanımları
 _COLORS: dict[str, str] = {
@@ -83,11 +83,16 @@ _REDACTION_FILTER = _SensitiveDataFilter()
 
 # ---------------------------------------------------------------------------
 
-_shared_file_handler: logging.FileHandler | None = None
+_shared_file_handler: TimedRotatingFileHandler | None = None
 
 
-def _get_file_handler() -> logging.FileHandler | None:
-    """Tum modul logger'lari icin ortak paylasilan tekil dosya isleyicisini dondurur."""
+def _get_file_handler() -> TimedRotatingFileHandler | None:
+    """
+    Tum modul logger'lari icin ortak paylasilan tekil dosya isleyicisini dondurur.
+
+    Gece yarisi otomatik rotate eder ve LOG_RETENTION_DAYS'ten eski log dosyalarini
+    otomatik olarak siler (disk dolma riskine karsi koruma).
+    """
     global _shared_file_handler
     if _shared_file_handler is not None:
         return _shared_file_handler
@@ -95,9 +100,18 @@ def _get_file_handler() -> logging.FileHandler | None:
     try:
         log_dir = Path(LOG_DIR)
         log_dir.mkdir(parents=True, exist_ok=True)
-        log_filename = log_dir / f"cato_sla_{datetime.now().strftime('%Y%m%d')}.log"
+        log_filename = log_dir / "cato_sla.log"
 
-        _shared_file_handler = logging.FileHandler(log_filename, encoding="utf-8")
+        _shared_file_handler = TimedRotatingFileHandler(
+            filename=log_filename,
+            when="midnight",          # Her gece yarisi yeni dosyaya gec
+            interval=1,               # Her 1 gunde bir
+            backupCount=LOG_RETENTION_DAYS,  # Son N gunu sakla, eskisini sil
+            encoding="utf-8",
+            utc=False,                # Lokal saate gore rotate
+        )
+        # Rotated dosyalarin adi: cato_sla.log.YYYY-MM-DD
+        _shared_file_handler.suffix = "%Y-%m-%d"
         _shared_file_handler.setLevel(logging.DEBUG)
         _shared_file_handler.setFormatter(
             logging.Formatter(fmt=LOG_FORMAT, datefmt=LOG_DATE_FORMAT)

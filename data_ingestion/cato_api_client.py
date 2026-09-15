@@ -292,8 +292,16 @@ class CatoApiClient:
             except requests.exceptions.HTTPError as exc:
                 last_exc = exc
                 if exc.response is not None and exc.response.status_code == 429:
-                    wait = CATO_API_RETRY_DELAY_SECONDS * attempt
-                    logger.warning("Rate limit (429). %ds bekleniyor...", wait)
+                    # Once sunucunun Retry-After header'ini oku (RFC 7231)
+                    retry_after = exc.response.headers.get("Retry-After")
+                    try:
+                        wait = int(retry_after) if retry_after else CATO_API_RETRY_DELAY_SECONDS * attempt
+                    except (ValueError, TypeError):
+                        wait = CATO_API_RETRY_DELAY_SECONDS * attempt
+                    logger.warning(
+                        "Rate limit (429). %ds bekleniyor... (Retry-After: %s)",
+                        wait, retry_after or "header yok, backoff kullaniliyor",
+                    )
                     time.sleep(wait)
                     continue
                 raise CatoApiError(

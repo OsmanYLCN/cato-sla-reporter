@@ -87,6 +87,7 @@ COLOR_ROW_ALT: str = "FFD9E1F2"
 LOG_LEVEL: str = "DEBUG"
 LOG_FORMAT: str = "%(asctime)s | %(levelname)-8s | %(name)s | %(message)s"
 LOG_DATE_FORMAT: str = "%Y-%m-%d %H:%M:%S"
+LOG_RETENTION_DAYS: int = 30  # Saklanacak maksimum log dosyası sayısı (gün)
 
 # ---------------------------------------------------------------------------
 # Cato Networks API Yapılandırması (v1.1.0)

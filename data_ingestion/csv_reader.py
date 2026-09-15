@@ -5,6 +5,7 @@ import pandas as pd
 from config.settings import (
     REQUIRED_COLUMNS,
     COL_EVENT,
+    EVENT_TYPE_ALIASES,
     VALID_EVENT_TYPES,
 )
 from data_ingestion.base_reader import BaseLogReader
@@ -74,22 +75,27 @@ class CsvLogReader(BaseLogReader):
 
         df = df[REQUIRED_COLUMNS].copy()
 
-        # Geçersiz olay tiplerini ayıklama
+        # API ve CSV aynı normalizasyon davranışını paylaşsın:
+        # EVENT_TYPE_ALIASES üzerinden kanonik forma çevir,
+        # tanınmayan event tiplerini at (transformer.py ile tutarlı).
         original_count = len(df)
-        unexpected_mask = ~df[COL_EVENT].str.strip().isin(VALID_EVENT_TYPES)
+        df[COL_EVENT] = df[COL_EVENT].str.strip().map(
+            lambda v: EVENT_TYPE_ALIASES.get(v, v)
+        )
+        unexpected_mask = ~df[COL_EVENT].isin(VALID_EVENT_TYPES)
         unexpected_count = unexpected_mask.sum()
 
         if unexpected_count > 0:
             unexpected_values = df.loc[unexpected_mask, COL_EVENT].unique().tolist()
-            logger.warning(
-                "%d satır geçersiz event_sub_type değeri nedeniyle atlanıyor: %s",
+            logger.debug(
+                "%d satir taninmayan event_sub_type nedeniyle atiliyor: %s",
                 unexpected_count,
                 unexpected_values,
             )
             df = df[~unexpected_mask].copy()
 
         logger.info(
-            "CSV yüklendi: %d satır (%d geçersiz kayıt atlandı).",
+            "CSV yuklendi: %d satir (%d kayit normalize/filtrelendi).",
             len(df),
             original_count - len(df),
         )

@@ -95,6 +95,16 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     if args.date_from or args.date_to:
         if not (args.date_from and args.date_to):
             parser.error("--date-from and --date-to must be provided together.")
+        try:
+            _dfrom = datetime.strptime(args.date_from, "%Y-%m-%d").date()
+            _dto   = datetime.strptime(args.date_to,   "%Y-%m-%d").date()
+        except ValueError as exc:
+            parser.error(f"Invalid date format: {exc}. Use YYYY-MM-DD.")
+        if _dfrom > _dto:
+            parser.error(
+                f"--date-from ({args.date_from}) cannot be later than "
+                f"--date-to ({args.date_to})."
+            )
         args.period = 0  # 0 indicates Custom Range
 
     if not args.period and args.period != 0:

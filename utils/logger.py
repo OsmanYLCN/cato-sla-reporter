@@ -1,4 +1,5 @@
 import logging
+import os
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -26,6 +27,62 @@ class _ColoredFormatter(logging.Formatter):
         return super().format(record)
 
 
+# ---------------------------------------------------------------------------
+# Hassas Veri Maskeleme Filtresi (CWE-532: Sensitive Data in Log Files)
+# ---------------------------------------------------------------------------
+_REDACTED = "***REDACTED***"
+
+# .env içindeki gizli değerlerin loglara sızmadığından emin olmak için
+# başlangıçta bir kez okunur; boş değerler maskeleme listesine dahil edilmez.
+_SENSITIVE_ENV_KEYS = (
+    "CATO_API_KEY",
+    "CATO_ACCOUNT_ID",
+    "SMTP_PASSWORD",
+    "SMTP_USERNAME",
+    "SMTP_HOST",
+)
+
+
+def _collect_secrets() -> list[str]:
+    """Maskeleme listesini environment'tan derlenir. Boş değerler dahil edilmez."""
+    secrets = []
+    for key in _SENSITIVE_ENV_KEYS:
+        val = os.getenv(key, "")
+        if val and len(val) >= 4:   # Çok kısa değerleri maskeleme (false positive riski)
+            secrets.append(val)
+    return secrets
+
+
+_SECRETS: list[str] = _collect_secrets()
+
+
+class _SensitiveDataFilter(logging.Filter):
+    """
+    Tum log kayitlarini tararak bilinen hassas degerleri ***REDACTED*** ile maskeler.
+    Her iki handler'a (konsol + dosya) ayni filtre uygulanir.
+    """
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        if _SECRETS:
+            msg = record.getMessage()
+            for secret in _SECRETS:
+                if secret in msg:
+                    # record.msg'yi ve args'ı birlikte güvenli hale getir
+                    record.msg = record.msg.replace(secret, _REDACTED)
+                    if record.args:
+                        record.args = tuple(
+                            arg.replace(secret, _REDACTED) if isinstance(arg, str) else arg
+                            for arg in (
+                                record.args if isinstance(record.args, tuple) else (record.args,)
+                            )
+                        )
+        return True   # Her zaman True: filtre mesajları silmez, sadece maskeler
+
+
+_REDACTION_FILTER = _SensitiveDataFilter()
+
+# ---------------------------------------------------------------------------
+
 _shared_file_handler: logging.FileHandler | None = None
 
 
@@ -45,6 +102,7 @@ def _get_file_handler() -> logging.FileHandler | None:
         _shared_file_handler.setFormatter(
             logging.Formatter(fmt=LOG_FORMAT, datefmt=LOG_DATE_FORMAT)
         )
+        _shared_file_handler.addFilter(_REDACTION_FILTER)
         return _shared_file_handler
     except OSError as exc:
         logging.getLogger(__name__).warning("Log dosyasi olusturulamadi: %s", exc)
@@ -71,6 +129,7 @@ def get_logger(name: str) -> logging.Logger:
     console_handler.setFormatter(
         _ColoredFormatter(fmt=LOG_FORMAT, datefmt=LOG_DATE_FORMAT)
     )
+    console_handler.addFilter(_REDACTION_FILTER)
     logger.addHandler(console_handler)
 
     # Gunluk log dosyasi yapilandirmasi (ortak dosya isleyicisi)
@@ -80,4 +139,3 @@ def get_logger(name: str) -> logging.Logger:
 
     logger.propagate = False
     return logger
-

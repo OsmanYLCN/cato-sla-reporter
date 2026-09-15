@@ -120,6 +120,12 @@ class CatoApiClient:
                 "Cato Account ID bulunamadi. "
                 ".env dosyasinda CATO_ACCOUNT_ID tanimlandigini kontrol edin."
             )
+        if not self._endpoint.startswith("https://"):
+            raise CatoApiError(
+                f"Guvenli olmayan endpoint reddedildi: '{self._endpoint}'. "
+                "CATO_API_ENDPOINT mutlaka 'https://' ile baslamalidir. "
+                "Duz HTTP uzerinden API anahtari gonderilemez."
+            )
 
         self._headers = {
             "x-api-key":    self._api_key,

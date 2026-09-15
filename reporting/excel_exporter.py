@@ -24,6 +24,7 @@ from config.settings import (
     EXCEL_SHEET_OVERALL,
     EXCEL_SHEET_SUMMARY,
     OUTPUT_DIR,
+    PERIOD_LABELS,
     SLA_STATUS_FAILED,
     SLA_STATUS_PASSED,
     SLA_THRESHOLD_PCT,
@@ -70,7 +71,9 @@ def export_to_excel(
     out_dir.mkdir(parents=True, exist_ok=True)
 
     report_date = report_date or date.today()
-    filename = f"SLA_Report_{period_months}M_{report_date.strftime('%Y-%m-%d')}_{datetime.now().strftime('%H-%M-%S')}.xlsx"
+    # period_months=0 (Custom Range) için dosya adını düzgün üret
+    period_label_safe = PERIOD_LABELS.get(period_months, f"{period_months}M").replace(" ", "_")
+    filename = f"SLA_Report_{period_label_safe}_{report_date.strftime('%Y-%m-%d')}_{datetime.now().strftime('%H-%M-%S')}.xlsx"
     file_path = out_dir / filename
 
     logger.info("Excel raporu olusturuluyor: %s", file_path)
@@ -274,7 +277,7 @@ def _build_overall_sheet(
         ws.row_dimensions[row_idx].height = 18
 
     # --- Rapor Bilgisi ---
-    period_label = f"{period_months} Month" if period_months == 1 else f"{period_months} Months"
+    period_label = PERIOD_LABELS.get(period_months, f"{period_months} Months")
     _section_row("Report Period",    period_label)
     _section_row("Total Sites",      len(df) if not df.empty else 0)
     _section_row("SLA Threshold",    f"{SLA_THRESHOLD_PCT:.2f}%")

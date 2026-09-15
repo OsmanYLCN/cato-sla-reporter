@@ -90,7 +90,7 @@ Generated Excel reports are saved to `output/SLA_Report_<Period>_<Timestamp>.xls
 
 ## Tests
 
-Run the test suite (87 unit tests covering API client, state machine, TUI, CLI, and calculators):
+Run the test suite (88 unit tests covering API client, state machine, TUI, CLI, and calculators):
 ```bash
 pytest tests/ -v
 ```

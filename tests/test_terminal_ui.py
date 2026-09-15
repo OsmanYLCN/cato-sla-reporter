@@ -1,4 +1,4 @@
-﻿import sys
+import sys
 from datetime import datetime, date
 from pathlib import Path
 from unittest.mock import patch, MagicMock
@@ -112,8 +112,17 @@ class TestTerminalUIInteractiveInputs:
             assert dfrom == "2026-08-01"
             assert dto == "2026-08-31"
 
-    def test_select_csv_file_from_sample_data(self):
+    def test_select_csv_file_with_scanned_files(self):
         tui = TerminalUI()
-        with patch.object(tui, "_safe_input", return_value="1"):
-            chosen_file = tui.select_csv_file()
-            assert chosen_file.endswith(".csv")
+        mock_files = [("sample.csv", Path("sample_data/sample.csv"), 1000.0, 50.0)]
+        with patch.object(tui, "_scan_csv_files", return_value=mock_files):
+            with patch.object(tui, "_safe_input", return_value="1"):
+                chosen_file = tui.select_csv_file()
+                assert chosen_file.endswith(".csv")
+
+    def test_select_csv_file_when_empty_prompts_manual_path(self):
+        tui = TerminalUI()
+        with patch.object(tui, "_scan_csv_files", return_value=[]):
+            with patch.object(tui, "_safe_input", return_value="custom/path/test.csv"):
+                chosen_file = tui.select_csv_file()
+                assert chosen_file == "custom/path/test.csv"

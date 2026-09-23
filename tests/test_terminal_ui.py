@@ -44,6 +44,16 @@ class TestTerminalUIComponents:
         captured = capsys.readouterr()
         assert "CATO NETWORKS" in captured.out
         assert "SLA & AVAILABILITY REPORTING ENGINE" in captured.out
+        assert "Version v1.1.3" in captured.out
+        assert "Developed by OsmanYLCN" in captured.out
+
+    def test_clear_screen_does_not_raise(self):
+        tui = TerminalUI()
+        tui.clear_screen()
+
+    def test_set_title_does_not_raise(self):
+        tui = TerminalUI()
+        tui.set_title("Test Title")
 
     def test_print_step_renders_all_statuses(self, capsys):
         tui = TerminalUI()

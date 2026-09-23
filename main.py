@@ -368,6 +368,8 @@ def main() -> None:
         is_interactive = (len(sys.argv) == 1 and sys.stdin.isatty()) or ("--interactive" in sys.argv)
         if is_interactive:
             tui = TerminalUI()
+            tui.clear_screen()
+            tui.set_title("Cato Networks — SD-WAN SLA & Availability Reporting Engine v1.1.3")
             tui.print_banner()
             source = tui.select_source()
             csv_path = None

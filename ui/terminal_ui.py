@@ -1,4 +1,4 @@
-﻿"""
+"""
 ui/terminal_ui.py
 
 Cato SLA Reporter — Terminal UI Module
@@ -11,6 +11,7 @@ Dis bagimlilik yok; yalnizca standart kutuphane kullanilir.
 Windows 10/11 ANSI Virtual Terminal Processing otomatik aktif edilir.
 """
 
+import os
 import re
 import sys
 import time
@@ -21,6 +22,14 @@ from pathlib import Path
 # Windows 10/11: ANSI renk destegini etkinlestir
 # ---------------------------------------------------------------------------
 if sys.platform == "win32":
+    try:
+        if hasattr(sys.stdout, "reconfigure"):
+            sys.stdout.reconfigure(encoding="utf-8")
+        if hasattr(sys.stderr, "reconfigure"):
+            sys.stderr.reconfigure(encoding="utf-8")
+    except Exception:
+        pass
+
     try:
         import ctypes
         _kernel32 = ctypes.windll.kernel32
@@ -107,13 +116,40 @@ class TerminalUI:
         sys.exit(0)
 
     # -------------------------------------------------------------------
-    # Banner
+    # Terminal Yonetimi ve Banner
     # -------------------------------------------------------------------
 
-    def print_banner(self, version: str = "v1.1.2") -> None:
+    def clear_screen(self) -> None:
+        """
+        Terminal ekranini ve kaydirma gecmisini (scrollback) temizler.
+        Eski terminal mesajlarini temizleyerek ozel, ferah bir ekran sunar.
+        """
+        if sys.stdout.isatty():
+            if sys.platform == "win32":
+                os.system("cls")
+            else:
+                os.system("clear")
+            # ANSI scrollback temizleme ve imleci basa alma
+            sys.stdout.write("\033[H\033[2J\033[3J")
+            sys.stdout.flush()
+
+    def set_title(self, title: str = "Cato Networks — SD-WAN SLA & Availability Reporting Engine v1.1.3") -> None:
+        """Terminal pencere basligini ayarlar."""
+        if not sys.stdout.isatty():
+            return
+        if sys.platform == "win32":
+            try:
+                import ctypes
+                ctypes.windll.kernel32.SetConsoleTitleW(title)
+            except Exception:
+                pass
+        sys.stdout.write(f"\033]0;{title}\007")
+        sys.stdout.flush()
+
+    def print_banner(self, version: str = "v1.1.3") -> None:
         """Kurumsal baslik banner'ini yazdirir."""
         TITLE = "CATO NETWORKS  —  SD-WAN SLA & AVAILABILITY REPORTING ENGINE"
-        SUB   = f"Version {version}    |    github.com/YOUR_ORG/cato-sla-reporter"
+        SUB   = f"Version {version}    |    Developed by OsmanYLCN"
         W = 75
         print()
         print(f"{UI.CYAN}{UI.BOLD}╔" + "═" * W + "╗")
